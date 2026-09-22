@@ -1,0 +1,22 @@
+# Vì sao cần file này: không có nó, Git báo "toàn bộ file đã thay đổi" mỗi khi
+# checkout hoặc merge giữa máy Windows và bản trên GitHub — dù nội dung không
+# đổi một ký tự nào. Đã xảy ra thật với app.py: 983 dòng chuyển từ LF sang
+# CRLF, kích thước tăng đúng 983 byte, code giống hệt.
+
+* text=auto eol=lf
+
+# ĐÁNH DẤU BINARY CHO MỌI FILE KHÔNG PHẢI CHỮ.
+#
+# `text=auto` ở trên dựa vào việc Git tự đoán file nào là chữ file nào không.
+# Đoán thì phần lớn đúng, nhưng hỏng ở đây là hỏng câm: một file model bị sửa
+# ký tự xuống dòng thì XGBoost nạp vào báo "Invalid model format", mà lỗi ấy
+# chỉ hiện ra trên máy chủ sau khi deploy. Ghi thẳng ra thì không phải trông
+# vào phép đoán nào cả.
+*.parquet binary
+*.ubj    binary
+*.pkl    binary
+*.xlsx   binary
+*.xls    binary
+*.png    binary
+*.jpg    binary
+*.sqlite binary

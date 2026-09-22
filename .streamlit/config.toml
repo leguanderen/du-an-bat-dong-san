@@ -1,0 +1,38 @@
+# CẤU HÌNH GIAO DIỆN — GHIM NỀN SÁNG
+#
+# VÌ SAO FILE NÀY PHẢI CÓ
+# -----------------------
+# Không có file này, Streamlit tự chọn nền theo cài đặt hệ điều hành của NGƯỜI
+# XEM. Ai đang để máy ở chế độ tối sẽ nhận bản dựng tối của Streamlit, và
+# `inject_css` trong app.py chỉ phủ được những thành phần nó gọi tên — còn
+# danh sách thả xuống, ô chat, bảng dữ liệu, thanh trên cùng thì vẫn tối. Kết
+# quả là một trang nửa sáng nửa tối, và lỗi này KHÔNG hiện ra khi chạy thử ở
+# máy đang để nền sáng, chỉ hiện ra sau khi deploy.
+#
+# Ghim ở đây thì CSS trong app chỉ còn việc tinh chỉnh, không phải đánh nhau
+# với bản dựng mặc định.
+#
+# CHỈ DÙNG SÁU KHOÁ ỔN ĐỊNH
+# -------------------------
+# Streamlit các bản mới có thêm borderColor, linkColor, baseRadius,
+# headingFont… nhưng requirements.txt để `streamlit>=1.40` nên bản cài trên
+# mạng có thể không cùng bản với máy này. Sáu khoá dưới đây đã có từ rất lâu,
+# nên chắc chắn chạy. Phần còn lại để `inject_css` lo.
+#
+# Màu ở đây PHẢI trùng với hằng số COLOR trong app.py. Đổi một bên mà quên bên
+# kia thì viền và nền lệch nhau một tông — rất khó nhìn ra bằng mắt.
+
+[theme]
+base = "light"
+primaryColor = "#2B4C8C"              # COLOR["accent"] — xanh mực
+backgroundColor = "#F7F5F1"           # COLOR["bg"] — nền giấy ấm
+secondaryBackgroundColor = "#FFFFFF"  # COLOR["surface"] — thẻ trắng nổi lên
+textColor = "#17181C"                 # COLOR["text"]
+font = "sans serif"
+
+[server]
+# File dữ liệu .xlsx của dự án khá lớn; mặc định 200 MB là đủ nhưng để rõ.
+maxUploadSize = 50
+
+[browser]
+gatherUsageStats = false

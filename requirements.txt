@@ -1,0 +1,29 @@
+# Đúng những gói ứng dụng cần khi CHẠY. Không gồm gói chỉ dùng lúc cào dữ
+# liệu hay lúc phân tích (requests, beautifulsoup4, shapely, matplotlib…) —
+# thêm vào chỉ làm bản triển khai nặng và lâu khởi động hơn.
+#
+# Cố định phiên bản chính để bản trên mạng không tự đổi sau lưng: Streamlit
+# Cloud cài lại mỗi lần deploy, và một bản pandas mới có thể làm vỡ code đang
+# chạy tốt.
+
+streamlit>=1.40
+pandas>=2.0
+numpy>=1.26
+openpyxl>=3.1          # đọc file .xlsx dữ liệu (chỉ dùng khi dựng lại gói)
+
+# BẮT BUỘC — không có nó thì bản trên mạng KHÔNG chạy được.
+# `pandas.read_parquet` cần một engine, và pyarrow là engine mặc định. Thiếu
+# dòng này thì app nạp gói `_trien_khai/` hỏng, quay về đọc .xlsx — mà .xlsx
+# lại không được đẩy lên (xem .gitignore), nên nó chết hẳn chứ không chỉ chậm.
+pyarrow>=14.0
+xgboost>=2.0           # mô hình định giá
+scikit-learn>=1.4      # chia fold, mã hoá mục tiêu (kéo theo scipy)
+pydeck>=0.9            # bản đồ trong tab Khu vực
+
+# Bản đồ bấm-để-ghim ở form định giá. Đây là thứ pydeck KHÔNG làm được: chọn
+# đối tượng trong lớp thì pydeck trả về, nhưng bấm vào một điểm bất kỳ để lấy
+# toạ độ thì phải dùng folium. Xứng đáng thêm hai gói: đo được là biết đúng vị
+# trí thay vì chỉ biết phường giúp giảm 3,41 điểm MAPE (chung cư) và 2,29 điểm
+# (nhà đất). Thiếu hai gói này app vẫn chạy, chỉ mất riêng cách ghim bản đồ.
+folium>=0.17
+streamlit-folium>=0.22

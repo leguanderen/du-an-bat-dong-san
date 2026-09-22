@@ -1,0 +1,129 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+venv/
+
+# .streamlit/ TRƯỚC ĐÂY BỊ LOẠI CẢ CỤM — và đó là lỗi.
+#
+# Thư mục này có hai loại file rất khác nhau: `secrets.toml` (khoá bí mật,
+# tuyệt đối không đẩy lên) và `config.toml` (ghim giao diện nền sáng, BẮT
+# BUỘC phải có trên máy chủ). Loại cả thư mục thì mất luôn config.toml, và
+# hậu quả không hiện ra ở máy mình: ai xem trang bằng máy đang để chế độ tối
+# sẽ nhận bản dựng tối của Streamlit, trang thành nửa sáng nửa tối.
+.streamlit/*
+!.streamlit/config.toml
+
+# ---------------------------------------------------------------------------
+# DỮ LIỆU THÔ — KHÔNG đẩy lên GitHub
+# ---------------------------------------------------------------------------
+# Riêng bốn file .sql ranh giới hành chính đã 152 MB, chotot_store.sqlite thêm
+# 29 MB. GitHub chặn file trên 100 MB và Streamlit Cloud phải tải cả kho về
+# mỗi lần deploy — đẩy lên thì vừa hỏng vừa chậm mà ứng dụng không hề dùng tới.
+#
+# Chúng chỉ cần khi CHẠY LẠI pipeline, mà việc đó làm trên máy cá nhân.
+data_raw/*
+# ...trừ một file: danh sách tiện ích OpenStreetMap, 537 KB, cần cho khối
+# "Tiện ích quanh đây". Phải viết `data_raw/*` chứ không phải `data_raw/` thì
+# dòng phủ định dưới đây mới có tác dụng — Git không chui vào thư mục đã bị
+# loại cả cụm.
+!data_raw/osm_tien_ich.csv
+
+_test/
+_test_app/
+_thu_moi/
+
+# _scratch: bỏ phần nháp, GIỮ các bộ kiểm.
+#
+# Chúng là bằng chứng cho phần "đã kiểm những gì" của luận văn, và người chấm
+# mở repo ra phải thấy được. Mỗi file chỉ vài KB.
+# CHỈ GIỮ _scratch Ở THƯ MỤC GỐC. `pipeline/_scratch/` là nháp cũ, trong đó
+# có bản LỖI THỜI của kiem_tim_nha.py và kiem_hoi_thoai.py — trùng tên với
+# bản đang dùng ở ngoài gốc. Để cả hai vào kho thì người đọc phải đoán file
+# nào là thật, đúng kiểu rắc rối mà app_cu.py gây ra.
+#
+# Lưu ý cách Git đọc luật: mẫu có dấu `/` ở giữa thì neo vào thư mục chứa
+# .gitignore, nên `_scratch/*` KHÔNG chạm tới `pipeline/_scratch/`. Phải ghi
+# riêng ra một dòng.
+pipeline/_scratch/
+
+_scratch/*
+!_scratch/kiem_*.py
+# thu_app.py là bộ streamlit giả mà MỌI bộ kiểm giao diện gọi tới.
+# Giữ kiem_*.py mà bỏ nó thì cả bảy bộ kiểm không chạy được.
+!_scratch/thu_app.py
+
+# File tạm của pipeline
+data_clean/_tam_gop/
+data_clean/*_clean.xlsx
+data_clean/*_clean_geo.xlsx
+data_clean/*_tien_ich*.xlsx
+data_clean/*_gop.xlsx
+data_clean/ablation_*.xlsx
+data_clean/bao_cao_*.xlsx
+data_clean/do_phu_*.xlsx
+data_clean/duong_cong_*.xlsx
+data_clean/ket_qua_*.xlsx
+data_clean/khoang_tin_cay_*.xlsx
+data_clean/kiem_*.xlsx
+data_clean/nguong_nhieu_*.xlsx
+data_clean/tam_quan_trong_*.xlsx
+data_clean/vi_du_dinh_gia_*.xlsx
+data_clean/du_phong_*.xlsx
+data_clean/*_ngoai_lai.xlsx
+data_clean/*_sua_don_vi.xlsx
+data_clean/*_phan_khuc_khac.xlsx
+data_clean/*.png
+data_clean/*.sqlite
+data_clean/_chi_tiet_*.csv
+
+# Model .pkl của hệ thống cũ — không còn dùng
+*.pkl
+*_ready_to_train.xlsx
+
+# ---------------------------------------------------------------------------
+# GIỮ LẠI — ứng dụng cần đúng những thứ này để chạy
+# ---------------------------------------------------------------------------
+# HAI FILE .XLSX GỐC GIỜ KHÔNG ĐẨY LÊN NỮA (10 MB).
+#
+# `_trien_khai/` đã thay chúng ở MỌI đường chạy: phần định giá đọc parquet,
+# phần bản đồ cũng đọc chính file parquet đó. Đã kiểm bằng cách giấu hai file
+# .xlsx đi rồi chạy lại toàn bộ — cả bốn tab vẫn chạy, 0 lỗi. Chúng chỉ còn
+# cần khi DỰNG LẠI gói, mà việc đó làm ở máy cá nhân.
+data_clean/*gop_geo.xlsx
+
+!data_clean/ranh_gioi_phuong_hanoi.geojson
+!data_clean/bang_tra_phuong.xlsx
+!data_clean/luoi_gia_chungcu.xlsx
+!data_clean/luoi_gia_nhadat.xlsx
+!data_clean/kiem_trong_so_tien_ich.xlsx
+
+# ---------------------------------------------------------------------------
+# GÓI TRIỂN KHAI — PHẢI ĐẨY LÊN
+# ---------------------------------------------------------------------------
+# 25 MB: dữ liệu .parquet + bốn model XGBoost mỗi loại. Đây chính là thứ rút
+# khởi động lạnh từ 16,6 giây xuống 0,32 giây. Thiếu nó thì app vẫn chạy
+# đúng, nhưng phải huấn luyện lại lúc khởi động — mà trên Streamlit Cloud app
+# ngủ sau một lúc, nên gần như ai mở link cũng gặp lần khởi động lạnh đó.
+#
+# Dựng lại bằng `python chuan_bi_trien_khai.py` mỗi khi dữ liệu hoặc cấu hình
+# đặc trưng đổi. Quên chạy cũng không sai: vân tay không khớp thì app tự huấn
+# luyện lại, chỉ chậm.
+
+# ---------------------------------------------------------------------------
+# BẢN CŨ VÀ FILE RIÊNG CỦA MÁY — không thuộc về kho mã
+# ---------------------------------------------------------------------------
+# app.py ở thư mục gốc mới là bản đang chạy. Hai thứ dưới đây là bản cũ, giữ
+# lại trên máy cho yên tâm thì được, nhưng đẩy lên kho thì người đọc không
+# biết file nào là thật.
+app_cu.py
+app_moi/
+
+# Trang HTML thô tải về lúc cào dữ liệu (gần 1 MB) — dữ liệu nguồn, không
+# phải mã nguồn.
+mau/
+
+# Thư mục do công cụ sinh ra và file nháp
+Claude outputs/
+_kiem_tra_gitignore.txt
+_scratch/*.html
