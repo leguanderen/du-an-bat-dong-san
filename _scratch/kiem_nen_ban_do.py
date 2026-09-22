@@ -66,5 +66,17 @@ kiem("câu báo nói rõ ghim vẫn dùng được", "toạ độ vẫn đúng" 
 kiem("Jinja2 không nuốt mất {z}/{x}/{y}",
      "{z}" in h and "{x}" in h and "{y}" in h)
 
+# --- con lăn không được nuốt thao tác cuộn trang ---------------------------
+# Bắt được lúc dùng thử bản trên mạng: cuộn trang qua bản đồ thì bản đồ nuốt
+# con lăn, zoom tuột từ Hà Nội ra cả Đông Nam Á, trang đứng im.
+kiem("mặc định con lăn thuộc về TRANG",
+     "scrollWheelZoom.disable()" in h)
+kiem("bấm vào bản đồ thì con lăn thuộc về bản đồ",
+     "on('click'" in h and "scrollWheelZoom.enable()" in h)
+kiem("đưa chuột ra ngoài thì trả con lăn lại cho trang",
+     "mouseleave" in h)
+kiem("đoạn JS con lăn chạy SAU khi bản đồ được dựng",
+     h.index("scrollWheelZoom.disable()") > h.index("= L.map("))
+
 print("\nsố lỗi:", loi)
 sys.exit(1 if loi else 0)

@@ -337,6 +337,19 @@ def inject_css() -> None:
         }}
         p, span, label, .stMarkdown {{ color: var(--text); }}
 
+        /* ...NHƯNG KHÔNG ÁP VÀO CHỮ BÊN TRONG NÚT.
+           Luật ngay trên quá rộng. Streamlit dựng nhãn nút bằng một khối
+           markdown, nên chữ trong nút là thẻ <p> — và nó dính luật đó, thành
+           MỰC ĐEN TRÊN NỀN XANH: đo được 1,9:1, tức gần như không đọc nổi.
+           Người dùng nhìn ra trước tôi.
+
+           `color: inherit` để chữ đi theo màu của chính cái nút: nút đặc thì
+           trắng (8,35:1), nút viền thì xanh mực. Một luật lo cho cả hai,
+           không phải đi tô màu từng loại nút. */
+        .stButton button *,
+        [data-testid="stFormSubmitButton"] button *,
+        [data-testid="stDownloadButton"] button * {{ color: inherit !important; }}
+
         /* Thẻ trắng nổi trên nền giấy. Đổ bóng NHẸ hơn hẳn bản tối: trên nền
            sáng, bóng đậm đọc ra là bẩn chứ không phải nổi. */
         [data-testid="stVerticalBlockBorderWrapper"] {{
@@ -435,18 +448,35 @@ def inject_css() -> None:
             margin: 0 !important; font-weight: 600 !important; font-size: .92rem;
         }}
         .st-key-nav_chinh [role="radiogroup"] label:hover {{ background: var(--surface-2); }}
-        /* Ẩn vòng tròn CHỈ KHI trình duyệt hiểu `:has()`, vì dấu "đang chọn"
-           của dạng viên thuốc phụ thuộc hoàn toàn vào `:has()`. Trình duyệt
-           cũ không hiểu thì giữ nguyên vòng tròn — thà kém đẹp còn hơn để
-           người dùng không biết mình đang đứng ở tab nào. */
+        /* VÒNG TRÒN RADIO NẰM SÂU HƠN MỘT TẦNG SO VỚI TÔI TƯỞNG.
+           Bản đầu tôi viết `label > div:first-child`, và trên bản chạy thật
+           nó không ăn: viên thuốc có nền xanh nhưng vòng tròn vẫn nằm trong.
+           Mở DOM thật ra xem mới thấy con đầu của `label` là một `<span>` ẩn
+           chứa ô radio thật (cho trình đọc màn hình), nên cái `div` kia là
+           con THỨ HAI — `div:first-child` không khớp phần tử nào cả.
+           Cấu trúc thật:
+               label > span(ẩn) > input
+                     > div > div(vòng tròn) + div(chữ)
+
+           Nhắm theo cấu trúc chứ không theo tên class: class của Streamlit
+           là chuỗi băm kiểu `st-emotion-cache-1gzjdm4`, đổi theo từng bản.
+
+           Hai selector cho trạng thái "đang chọn", cố ý trùng nhau:
+           `[data-selected]` là thuộc tính Streamlit tự đặt, còn
+           `:has(input:checked)` dựa vào chính ô radio. Bản Streamlit nào bỏ
+           thuộc tính kia thì cái còn lại vẫn giữ được dấu đang chọn — mà mất
+           dấu đang chọn thì người dùng không biết mình đứng ở tab nào, trong
+           khi vòng tròn thì đã bị ẩn. */
         @supports selector(:has(*)) {{
-            .st-key-nav_chinh [role="radiogroup"] label > div:first-child {{
+            .st-key-nav_chinh [role="radiogroup"] label > div > div:first-child {{
                 display: none !important;
             }}
-            .st-key-nav_chinh [role="radiogroup"] label:has(input:checked) {{
+            .st-key-nav_chinh [role="radiogroup"] label:has(input:checked),
+            .st-key-nav_chinh [role="radiogroup"] label[data-selected="true"] {{
                 background: var(--accent) !important;
             }}
-            .st-key-nav_chinh [role="radiogroup"] label:has(input:checked) p {{
+            .st-key-nav_chinh [role="radiogroup"] label:has(input:checked) p,
+            .st-key-nav_chinh [role="radiogroup"] label[data-selected="true"] p {{
                 color: #FFFFFF !important;
             }}
         }}
@@ -1531,7 +1561,20 @@ NGUONG_HONG_NEN = 5
 
 
 def _nen_ban_do(m, folium) -> None:
-    """Gắn nền chính + dây chuyền dự phòng cho một bản đồ folium."""
+    """Gắn nền + dây chuyền dự phòng + sửa chuyện con lăn bị bản đồ nuốt.
+
+    CON LĂN: BẢN ĐỒ CHỈ ĐƯỢC PHÓNG TO SAU KHI NGƯỜI DÙNG BẤM VÀO NÓ.
+
+    Bắt được lúc dùng thử chính bản trên mạng: đang cuộn trang xuống, con trỏ
+    đi ngang qua bản đồ, thế là bản đồ nuốt con lăn và zoom tuột từ Hà Nội ra
+    cả Đông Nam Á — còn trang thì đứng im. Bản đồ nằm giữa một trang dài nên
+    người dùng sẽ dính chuyện này liên tục.
+
+    Tắt hẳn zoom bằng con lăn thì lại làm khó đúng việc quan trọng nhất của
+    bản đồ ghim: phóng to tìm đúng căn nhà. Nên làm theo lối quen thuộc của
+    bản đồ nhúng: mặc định con lăn thuộc về TRANG, bấm một cái vào bản đồ thì
+    con lăn thuộc về BẢN ĐỒ, đưa chuột ra ngoài thì trả lại cho trang.
+    """
     url0, attr0 = NEN_FOLIUM[0]
     lop = folium.TileLayer(tiles=url0, attr=attr0, name="nen",
                            control=False, max_zoom=19)
@@ -1548,6 +1591,14 @@ def _nen_ban_do(m, folium) -> None:
     js = """
         (function () {
           var lop = %s, ban_do = %s;
+
+          // --- con lăn: của trang, cho tới khi người dùng bấm vào bản đồ ---
+          ban_do.scrollWheelZoom.disable();
+          ban_do.on('click', function () { ban_do.scrollWheelZoom.enable(); });
+          ban_do.getContainer().addEventListener('mouseleave', function () {
+            ban_do.scrollWheelZoom.disable();
+          });
+
           var du = %s, i = 0, hong = 0, het = false;
           lop.on('tileload', function () { hong = 0; });
           lop.on('tileerror', function () {
