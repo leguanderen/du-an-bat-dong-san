@@ -54,6 +54,27 @@ HO_HOAN_KIEM = (21.0287, 105.8524)
 MUC_LUOI_KM = (0.5, 1.0, 2.0, 4.0)
 N_TOI_THIEU = 5
 
+# NGƯỠNG CHO PHƯỜNG LÀ MỘT CON SỐ KHÁC, ĐỪNG DÙNG CHUNG VỚI N_TOI_THIEU.
+#
+# `N_TOI_THIEU` ở trên là cho Ô LƯỚI (0,5–4 km). Ô lưới nhỏ, 5 tin trong một ô
+# 500 m là một khẳng định vừa phải. Nhưng cả một PHƯỜNG mà chỉ có 5 tin thì tô
+# màu cho nó là hứa một mặt bằng giá mình không có — phường Hà Nội rộng hàng
+# cây số vuông, 5 tin không đại diện được.
+#
+# Hai con số này trước đây bằng nhau (đều là 5) nên dễ tưởng là một. Tách ra
+# và đặt tên riêng để lần sau đổi cái nọ không kéo theo cái kia.
+#
+# Chọn 20 vì đó là chỗ đánh đổi hợp lý, đo được:
+#     ngưỡng    chung cư        nhà đất
+#        5      58/65 phường    76/83 phường   <- cũ, tô cả phường 5 tin
+#       10      55/65           70/83
+#       20      48/65           64/83          <- chọn
+#       30      39/65           59/83          <- mất quá nhiều
+# Lên 30 thì chung cư chỉ còn 60% số phường có dữ liệu được tô, bản đồ thủng
+# lỗ chỗ tới mức khó đọc. 20 giữ được gần ba phần tư mà vẫn bỏ được nhóm
+# phường mỏng nhất.
+N_TOI_THIEU_PHUONG = 20
+
 # Những mức toạ độ đủ chính xác để ghim một điểm lên bản đồ mà không nói dối.
 # `nguon_goc` là toạ độ sàn tự công bố, `ma_tin`/`du_an` khớp đúng đối tượng.
 # Các mức còn lại là ước lượng theo tên đường hoặc tên phường.
@@ -509,7 +530,7 @@ def thua_theo_luoi(d: pd.DataFrame, o_km: float,
     return g.drop(columns=["_r", "_c"]).reset_index(drop=True)
 
 
-def vung_phuong(loai: str, n_toi_thieu: int = 5,
+def vung_phuong(loai: str, n_toi_thieu: int = N_TOI_THIEU_PHUONG,
                 so_bac: int = 7) -> dict:
     """Choropleth: tô mỗi PHƯỜNG THẬT theo giá, dùng ranh giới hành chính thật.
 

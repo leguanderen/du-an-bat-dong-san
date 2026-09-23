@@ -185,6 +185,57 @@ def _chuan_cot(df: pd.DataFrame, goc: str, moi: str,
             f"{list(vd.head(3).index)}")
 
 
+# =============================================================================
+# GIÁ TRỊ BẤT KHẢ THI VỀ MẶT VẬT LÝ
+# =============================================================================
+# Sau khi đã dọn đơn vị ở khâu làm sạch, vẫn còn sót vài giá trị không thể có
+# thật. Quét sáu trường số chính thì ra 17 giá trị trên tổng 19.500 tin:
+#
+#   duong_rong_m  > 70 m   : 8 giá trị  (90, 100, 115, 245, và 19.491)
+#   mat_tien_m    > 50 m   : 1 giá trị  (90)
+#   tong_so_tang  > 20     : 5 giá trị  (25, 42, 55×3)
+#   tang_so       > 72     : 3 giá trị  (404, 912, 1104)
+#
+# NGƯỠNG LẤY TỪ GIỚI HẠN THỰC TẾ, KHÔNG LẤY TỪ PHÂN VỊ.
+#
+# Đây là chỗ dễ làm sai nhất. Lấy phân vị (kiểu "bỏ 1% cao nhất") thì mỗi lần
+# dữ liệu đổi là ngưỡng đổi theo, và quan trọng hơn: nó xoá cả những giá trị
+# HIẾM MÀ ĐÚNG. Tôi suýt cắt nhầm hai trường như vậy — căn hộ 620 m² và thửa
+# đất 3.882 m² nằm rất xa phân vị 99, nhưng cả hai đều có thật ở Hà Nội. Hiếm
+# không phải là sai, nên hai trường đó giữ nguyên.
+#
+# Mỗi ngưỡng dưới đây phải trả lời được câu "vì sao không thể lớn hơn":
+#   · 70 m  — Võ Nguyên Giáp, con đường rộng nhất Hà Nội
+#   · 50 m  — mặt tiền một căn nhà phố; rộng hơn thì đã là cả dãy
+#   · 20    — nhà thổ cư cao nhất cũng chỉ tới cỡ này (mini hotel)
+#   · 72    — Keangnam, toà nhà cao nhất Hà Nội
+#
+# ĐẶT NaN, KHÔNG XOÁ CẢ DÒNG. Một tin ghi sai bề rộng đường vẫn đúng ở diện
+# tích, giá, vị trí. Xoá cả dòng là vứt luôn phần đang dùng được, còn XGBoost
+# thì xử lý ô trống bình thường — đúng nguyên tắc đã theo từ đầu dự án: không
+# chắc thì để trống, không đoán.
+NGUONG_BAT_KHA_THI = {
+    "nhadat": {"duong_rong_m": 70, "mat_tien_m": 50, "tong_so_tang": 20},
+    "chungcu": {"tang_so": 72},
+}
+
+
+def bo_gia_tri_bat_kha_thi(df: pd.DataFrame, loai: str,
+                           canh_bao: list) -> None:
+    """Đặt NaN cho những giá trị vượt giới hạn vật lý. Sửa tại chỗ."""
+    for cot, nguong in NGUONG_BAT_KHA_THI.get(loai, {}).items():
+        if cot not in df.columns:
+            continue
+        xau = pd.to_numeric(df[cot], errors="coerce") > nguong
+        n = int(xau.sum())
+        if n:
+            vd = sorted(df.loc[xau, cot].unique())[:5]
+            canh_bao.append(
+                f"{cot}: {n} giá trị vượt mốc vật lý {nguong} -> đặt trống "
+                f"(ví dụ {', '.join(f'{v:g}' for v in vd)})")
+            df.loc[xau, cot] = np.nan
+
+
 def don_truong_chon(df: pd.DataFrame, loai: str) -> list[str]:
     """Chuẩn hoá tại chỗ và đặt tên cột ngắn để dùng làm đặc trưng.
 
@@ -342,10 +393,36 @@ def _bam_file(duong_dan) -> str:
     return h.hexdigest()[:16]
 
 
+# Tăng lên mỗi khi ĐỔI CÁCH LÀM SẠCH dữ liệu (bộ nhãn chuẩn hoá, cách ghép
+# cột, cách suy cột mới). Xem ghi chú trong `van_tay` để biết vì sao cần.
+PHIEN_BAN_DON_DU_LIEU = 2
+
+
 def van_tay(duong_dan_du_lieu, cfg, alpha: float) -> str:
-    """Vân tay của MỘT bộ (dữ liệu, cấu hình) — dùng để đóng dấu lên model."""
+    """Vân tay của MỘT bộ (dữ liệu, cấu hình) — dùng để đóng dấu lên model.
+
+    PHẢI GỒM CẢ CÁCH LÀM SẠCH, KHÔNG CHỈ FILE DỮ LIỆU VÀ DANH SÁCH CỘT.
+    -----------------------------------------------------------------
+    Bản đầu chỉ băm file .parquet cộng danh sách cột và alpha. Nghe thì đủ,
+    nhưng vừa dính ngay: tôi thêm `bo_gia_tri_bat_kha_thi` (17 giá trị vô lý
+    bị đặt trống), mà file .xlsx không đổi một byte, danh sách cột cũng y
+    nguyên — nên vân tay KHÔNG đổi, và gói cũ chứa dữ liệu bẩn vẫn được nhận.
+    Đúng kiểu "model lệch pha với dữ liệu" mà cả cơ chế này sinh ra để chặn,
+    chỉ khác là lệch ở khâu làm sạch chứ không phải khâu huấn luyện.
+    Im lặng sai, và nếu không tự nhớ ra thì bản deploy đã chạy dữ liệu cũ.
+
+    Nên vân tay giờ gồm thêm hai thứ:
+      · `NGUONG_BAT_KHA_THI` — sửa một con số ngưỡng là gói cũ tự hết hiệu
+        lực, không phải nhớ làm gì thêm;
+      · `PHIEN_BAN_DON_DU_LIEU` — cho những thay đổi khác trong khâu làm
+        sạch mà không nằm trong bảng ngưỡng. Cái này phải TỰ TAY tăng, nên
+        nó là điểm yếu còn lại: quên tăng thì vẫn lọt. Đổi khâu làm sạch mà
+        không chắc, cứ tăng nó lên một — chạy lại mất 15 giây, còn chạy nhầm
+        dữ liệu cũ thì không ai biết.
+    """
     return (_bam_file(duong_dan_du_lieu) + "-"
-            + van_tay_cau_hinh(list(cfg.cot_so), list(cfg.cot_muc), alpha))
+            + van_tay_cau_hinh(list(cfg.cot_so), list(cfg.cot_muc), alpha,
+                               NGUONG_BAT_KHA_THI, PHIEN_BAN_DON_DU_LIEU))
 
 
 def _nap_tu_goi(loai: str, alpha: float):
@@ -394,6 +471,7 @@ def _nap_tu_xlsx(loai: str):
     df = pd.read_excel(DATA_DIR / ten)
     lam_cot_toa_do(df)
     canh_bao = don_truong_chon(df, loai)
+    bo_gia_tri_bat_kha_thi(df, loai, canh_bao)
     # In ra TERMINAL, không đưa lên giao diện: đây là cảnh báo cho người bảo
     # trì pipeline, không phải thông tin người đi mua nhà cần đọc. Nhưng phải
     # in, vì thứ hỏng im lặng là thứ không bao giờ được sửa.

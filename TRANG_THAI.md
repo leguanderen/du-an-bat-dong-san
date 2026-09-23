@@ -1,21 +1,111 @@
-# Trạng thái dự án — cập nhật 01/09/2026
+# Trạng thái dự án — cập nhật 22/09/2026
+
+**Bản chạy thật: https://dinh-gia-bds-ha-noi.streamlit.app**
+Mã nguồn: https://github.com/leguanderen/du-an-bat-dong-san
 
 ## Đang ở đâu
 
+Mọi con số trong bảng này sinh ra từ **một lệnh duy nhất**:
+`python _scratch/do_toan_bo.py`. Trước đây mỗi con số đo bằng một lệnh riêng,
+ở một thời điểm riêng, rồi chép tay vào đây — và bảng ngày 01/09 sai gần hết
+dòng vì đúng lý do đó. Đo lại được thì mới kiểm lại được.
+
 | | Chung cư | Nhà đất |
 |---|---|---|
-| Số tin dùng được | **4.887** | **12.294** (nhatot 4.579 + batdongsan 7.715) |
-| MAPE (cấu hình chạy thật) | **14,81%** | **22,06%** |
-| R² | 0,830 | **0,801** |
-| Ngưỡng nhiễu không khử được | **11,87%** | **16,38%** |
-| **Khoảng còn có thể cải thiện** | **2,9 điểm** | **5,7 điểm** |
-| Độ phủ khoảng CQR | 90,1% ở ±36,0% | 90,1% ở ±44,8% |
-| Độ phủ nếu dùng ±15% cố định | 62,9% | 50,6% |
-| Toạ độ **chính xác** (sàn tự công bố / mã tin / dự án) | **55,7%** (2.722 tin) | **62,7%** (7.715 tin) |
-| Phường (mới) phủ được | 66 / 113 | 83 / 113 |
+| Số tin dùng được | **5.135** | **14.365** |
+| MAPE (5-fold, out-of-fold) | **14,89%** ±0,29 | **20,35%** ±0,73 |
+| Sai số **trung vị** | 9,93% | 13,66% |
+| Dự đoán lệch dưới 10% | 50,3% | 38,5% |
+| Dự đoán lệch dưới 20% | 77,5% | 66,5% |
+| R² | 0,864 | 0,878 |
+| Ngưỡng nhiễu không khử được | 12,97% | 18,42% |
+| **Khoảng còn có thể cải thiện** | **1,93 điểm** | **1,94 điểm** |
+| Độ phủ khoảng CQR (out-of-fold) | **89,7%** ở ±35,4% | **90,4%** ở ±42,4% |
+| Độ phủ nếu dùng ±15% cố định | 64,1% | 53,0% |
+| Toạ độ ghim được (sàn tự công bố / mã tin / dự án) | 57,8% | 70,0% |
+| Phường (mới) có dữ liệu | 65 / 113 | 83 / 113 |
+| — trong đó đủ 20 căn để tô bản đồ | 48 | 64 |
+| — dưới 30 căn, giao diện cảnh báo nhẹ | 26 | 24 |
+| — dưới 10 căn, giao diện cảnh báo mạnh | 10 | 13 |
+
+**Đọc bảng này cho đúng.** Ba chỗ dễ bị hiểu sai:
+
+- **MAPE trung bình cao hơn sai số trung vị khá nhiều** (20,35% so với 13,66%
+  ở nhà đất). Chênh đó không phải lỗi tính: phân phối sai số lệch phải, một
+  nhúm căn sai rất nặng kéo trung bình lên. Nói "một nửa số căn sai dưới
+  13,7%" vừa đúng vừa dễ hình dung hơn nói MAPE.
+- **Khoảng còn cải thiện chỉ còn khoảng 1,9 điểm ở cả hai nhánh.** Nghĩa là
+  model đã gần chạm mức mà chính dữ liệu cho phép; muốn tốt hơn nữa thì phải
+  có dữ liệu tốt hơn, không phải model khéo hơn.
+- **Ngưỡng nhiễu phụ thuộc rất mạnh vào định nghĩa nhóm** — xem phần cảnh báo
+  ở `_scratch/do_toan_bo.py`: cùng bộ dữ liệu, các định nghĩa hợp lý cho ra
+  từ 13,47% tới 19,97%. Trích con số này mà không kèm định nghĩa là vô nghĩa.
 
 
+## Đợt 18–22/09 — đưa lên mạng, hệ màu sáng, dọn nốt dữ liệu
 
+Đợt này gần như không đụng tới model. Toàn bộ là phần "dùng được thật" — và
+hoá ra đó mới là chỗ còn nhiều lỗi nhất.
+
+**Khởi động lạnh 16,6 giây → 0,32 giây.** App đang huấn luyện lại XGBoost mỗi
+lần khởi động. Đo ra thì cả hai nửa đều nặng: đọc .xlsx 1,6s + 5,6s, huấn
+luyện 2,6s + 6,0s. Streamlit Cloud cho app ngủ sau một lúc, nên gần như MỌI
+người mở link đều gặp lần khởi động lạnh đó. Thêm `chuan_bi_trien_khai.py`:
+đọc xlsx → .parquet, huấn luyện → ghi model ra file.
+
+Ghi chú cũ trong code giải thích rất rõ vì sao trước đây cố tình huấn luyện
+lại: để model không lệch pha với dữ liệu. Lý do đó vẫn đúng, nên nó không bị
+bỏ mà bị **kiểm**: model mang theo vân tay của đúng bộ dữ liệu + cấu hình
+sinh ra nó, lúc nạp tính lại và đem so, lệch là huấn luyện lại. 16 phép kiểm
+trong `_scratch/kiem_goi_trien_khai.py`, trong đó 9 phép cố tình làm hỏng gói
+rồi đòi hệ thống phải từ chối.
+
+**Ba lỗi bắt được trong lúc làm phần đó**, cả ba đều thuộc loại hỏng im lặng:
+
+1. *Gói model ghi ra ngoài thư mục dự án.* Hàm dò đường dẫn `thu_muc()` khi
+   không thấy thư mục thì đoán `BASE_DIR.parent`, mà `_trien_khai` lúc đó
+   chưa tồn tại. Mọi phép kiểm vẫn xanh, vì bên ghi và bên đọc dùng chung
+   đúng cái đường dẫn sai đó. Tách `thu_muc_ra()` riêng cho việc chọn chỗ
+   ghi, và script build giờ in đường dẫn tuyệt đối rồi tự chặn.
+2. *Vân tay không phủ khâu làm sạch.* Sau khi thêm bước bỏ giá trị bất khả
+   thi, file .xlsx không đổi một byte, danh sách cột cũng y nguyên — nên vân
+   tay không đổi và gói chứa dữ liệu bẩn vẫn được nhận. Vân tay giờ gồm cả
+   bảng ngưỡng và một số hiệu phiên bản khâu làm sạch.
+3. *Hàm ghi model `rmtree` cả thư mục người gọi đưa vào*, nuốt luôn file
+   .parquet vừa ghi cạnh nó.
+
+**Nền bản đồ chết vì bị chặn, không phải vì code sai.** Bản đồ ghim hiện ra
+một mảng xám trơn. Đo từng máy chủ bằng chính trình duyệt người dùng:
+`tile.openstreetmap.org` hỏng sau ~300 ms (bị chặn thẳng), trong khi cdnjs,
+jsdelivr, Esri đều đạt. Và một cái bẫy đáng ghi lại: CARTO trả HTTP 200 kèm
+ảnh PNG 256×256 hợp lệ — mà nội dung ảnh là dòng chữ "API KEY REQUIRED" in
+chéo. Phép thử "ảnh có tải được không" báo ĐẠT trong khi bản đồ hỏng sạch.
+Chuyển sang máy chủ gương OSM Đức, và thêm dây chuyền dự phòng chạy trong
+trình duyệt: hỏng liên tiếp thì tự đổi nền, hỏng hết cả bốn thì hiện chữ nói
+rõ thay vì để lại màn xám im lặng.
+
+**17 giá trị bất khả thi về mặt vật lý** còn sót sau khâu làm sạch: đường
+rộng 19.491 m, nhà thổ cư 55 tầng, chung cư tầng 1.104. Ngưỡng lấy từ giới
+hạn thực tế (đường rộng nhất Hà Nội ~70 m, toà cao nhất 72 tầng), **không**
+lấy từ phân vị — lấy phân vị thì xoá nhầm cả những giá trị hiếm mà đúng, và
+tôi suýt cắt nhầm căn hộ 620 m² với thửa đất 3.882 m², cả hai đều có thật.
+Giá trị vượt ngưỡng bị đặt trống chứ không xoá cả dòng.
+
+**Ngưỡng tô màu phường 5 → 20 căn.** Cả một phường Hà Nội mà chỉ có 5 tin thì
+tô màu cho nó là hứa một mặt bằng giá mình không có. Đánh đổi đo được: ngưỡng
+20 giữ được 48/65 phường chung cư và 64/83 nhà đất; lên 30 thì chung cư chỉ
+còn 39 phường, bản đồ thủng lỗ chỗ.
+
+**Giao diện đổi sang hệ sáng**, và phần này cũng ra mấy lỗi đo được: thang màu
+bản đồ có ba bậc nhạt nhất dính vào nhau (ΔL 0,041, dưới mốc 0,06), và bậc
+"rẻ nhất" chỉ cách ô "chưa đủ dữ liệu" 1,11:1 — tức là bảng màu đang biến chỗ
+THIẾU SỐ LIỆU thành một lời khẳng định về giá. Thang giờ sinh từ số đo (một
+sắc, độ sáng chia đều trong OKLab) thay vì chọn tay, kiểm bằng
+`_scratch/kiem_thang_mau.py`.
+
+Ngoài ra: chữ trong nút là mực đen trên nền xanh (1,9:1) vì một luật CSS quét
+quá rộng; con lăn chuột bị bản đồ nuốt khi cuộn trang; khung chat gọn lại còn
+3 căn gợi ý với danh sách đầy đủ tách sang màn riêng.
 
 ## Đợt 01/09 — nhà đất trang 351–650
 
@@ -303,26 +393,50 @@ Toàn bộ hệ thống dự đoán **giá RAO**, không phải giá giao dịch
 bằng kỹ thuật vì không có dữ liệu giao dịch công khai ở Việt Nam. Mọi con số
 MAPE trong khoá luận đều phải đọc là "sai lệch so với giá người bán *rao*".
 
-## Việc tiếp theo, theo thứ tự đã đổi
+## Việc tiếp theo, theo thứ tự
 
-1. **Chạy `app.py` thật trong trình duyệt.** Vẫn chưa ai mở. Rủi ro giao hàng
-   lớn nhất còn lại, và mục tiêu bạn đặt ra là "sản phẩm dùng được thật".
-2. **Kéo nhà đất lên** — giờ là hướng sinh lợi cao nhất (9,2 điểm khoảng trống
-   so với 3,4 của chung cư). Hai việc cụ thể: (a) cào nhà đất từ batdongsan để
-   có toạ độ chính xác, (b) bóc mặt tiền / độ rộng ngõ kỹ hơn từ mô tả.
-3. Cào tiếp chung cư — vẫn đáng, nhưng biết trước là 8.327 tin đổi 1 điểm.
-4. Bản đồ choropleth theo phường mới (cần tải ranh giới từ OSM).
-5. Tìm kiếm bằng câu tiếng Việt.
+1. **Khoảng tin cậy 50% đặt cạnh khoảng 90%.** Khoảng 90% rộng ±35–42%, đọc
+   lên nghe như hệ thống không biết gì. Thêm một khoảng hẹp hơn, vẫn có bảo
+   chứng thống kê, chỉ là mức đảm bảo thấp hơn — và nói rõ cả hai nghĩa gì.
+2. **Bản đồ giá theo vị trí đã khử đặc điểm nhà** (bản mẫu ở
+   `_scratch/thu_ban_do_vi_tri.py`). Sửa được chuyện Văn Miếu xếp hạng 58/58
+   theo giá thô nhưng hạng 40 khi khử diện tích và số tầng.
+3. **Tài liệu trả lời hội đồng.** Hệ thống có rất nhiều số đo nhưng đang nằm
+   rải trong comment của code. Gom lại một chỗ: ngưỡng nhiễu và độ nhạy 6,5
+   điểm của nó, vì sao SHAP cộng được bằng tiền chứ không cộng được bằng
+   phần trăm, vì sao 70% tin xác định được đúng căn.
+4. Cào thêm nhà đất — vẫn là nhánh còn nhiều đất nhất, nhưng khoảng trống so
+   với ngưỡng nhiễu giờ chỉ còn 1,94 điểm, nên lợi ích đã giảm hẳn so với
+   hồi tháng 8.
 
 ## Chạy lại toàn bộ
 
 ```
+# 1. Dựng lại dữ liệu (chỉ khi cào thêm tin mới)
 cd pipeline
 python gop_nguon.py --do-luong
-python gazetteer_phuong.py --ap-dung
+python gazetteer_phuong.py --ap-dung     # BẮT BUỘC, bỏ là phường về 171 tên lẫn lộn
 python ban_do.py
 python tien_ich.py --cham-diem
-python _scratch/do_lai_tap_gop.py        # bảng số đầy đủ
-python _scratch/vi_du_dinh_gia.py        # ví dụ ngoài mẫu
-python _scratch/thu_bo_nguon.py          # kiểm tra cột nguồn
+
+# 2. Dựng gói triển khai — BẮT BUỘC trước khi deploy
+cd ..
+python chuan_bi_trien_khai.py
+
+# 3. Đo lại mọi chỉ số (số trong bảng "Đang ở đâu" ở trên)
+python _scratch/do_toan_bo.py
+
+# 4. Chạy toàn bộ bộ kiểm
+python _scratch/thu_app.py               # 4 tab
+python _scratch/kiem_goi_trien_khai.py   # gói model + vân tay
+python _scratch/kiem_tim_nha.py          # 69 câu
+python _scratch/kiem_hoi_thoai.py        # 18 lượt hội thoại
+python _scratch/kiem_chat_gon.py         # khung chat
+python _scratch/kiem_chat_luot.py
+python _scratch/kiem_nen_ban_do.py       # nền bản đồ + dự phòng
+python _scratch/kiem_thang_mau.py        # thang màu bản đồ
+python _scratch/kiem_phuong_mong.py      # cảnh báo phường mỏng
+
+# 5. Đẩy lên
+git add -A && git commit -m "..." && git push
 ```

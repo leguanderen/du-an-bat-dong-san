@@ -712,6 +712,65 @@ def _thanh_yeu_to(yeu_to: list[dict], gia_co_so: float | None = None,
                "Thanh sang phải là làm tăng giá, sang trái là làm giảm.")
 
 
+# =============================================================================
+# CẢNH BÁO PHƯỜNG MỎNG DỮ LIỆU
+# =============================================================================
+# Hệ thống vẫn đưa ra giá cho MỌI phường, kể cả phường chỉ có vài căn — và
+# trước đây không nói gì cả. Đo ra thì đây không phải trường hợp hiếm:
+#
+#                     phường có dữ liệu   dưới 30 căn   dưới 10 căn
+#       chung cư             65               26            10
+#       nhà đất              83               24            13
+#
+# Tức là khoảng một phần ba số phường rơi vào nhóm mỏng. Con số đưa ra ở đó
+# không sai về mặt kỹ thuật — model vẫn học được từ quận, từ toạ độ, từ đặc
+# điểm căn — nhưng người dùng đang đọc nó với cùng mức tin như một phường có
+# 300 căn, mà hai thứ đó không giống nhau.
+#
+# ĐÂY LÀ CÂU HỎI HỘI ĐỒNG CHẮC CHẮN SẼ HỎI, và câu trả lời tốt không phải là
+# "giấu đi cho đẹp" mà là "nói ra ngay cạnh con số".
+#
+# Hai mức, không phải một: dưới 10 căn thì gần như không có căn cứ tại chỗ,
+# 10–29 thì có nhưng mỏng. Gộp làm một mức thì hoặc là doạ người dùng ở
+# trường hợp 25 căn, hoặc là quá nhẹ tay ở trường hợp 3 căn.
+NGUONG_PHUONG_MONG = 30
+NGUONG_PHUONG_RAT_MONG = 10
+
+
+@lru_cache(maxsize=256)
+def _so_can_trong_phuong(loai: str, phuong: str) -> int:
+    df = vs.nap(loai)["df"]
+    return int((df["phuong_moi"] == phuong).sum())
+
+
+def _canh_bao_phuong_mong(loai: str, dac_diem: dict) -> None:
+    """Nói thẳng khi phường người dùng chọn có quá ít căn làm căn cứ."""
+    phuong = dac_diem.get("phuong_moi")
+    if not phuong:
+        return
+    n = _so_can_trong_phuong(loai, phuong)
+    if n >= NGUONG_PHUONG_MONG:
+        return
+
+    if n < NGUONG_PHUONG_RAT_MONG:
+        mau, nen = COLOR["danger"], COLOR["danger_nen"]
+        chu = (f"<b>{phuong}</b> chỉ có <b>{n} căn</b> trong dữ liệu. "
+               f"Con số trên chủ yếu suy từ quận và từ đặc điểm căn nhà, "
+               f"gần như không có căn tương tự ngay tại phường để đối chiếu "
+               f"— hãy coi đây là mức tham khảo rất thô.")
+    else:
+        mau, nen = COLOR["warn"], COLOR["warn_nen"]
+        chu = (f"<b>{phuong}</b> có <b>{n} căn</b> trong dữ liệu — đủ để ước "
+               f"lượng nhưng còn mỏng. Khoảng giá ở đây rộng hơn bình thường, "
+               f"và nên đọc kèm phần “căn tương tự” bên dưới.")
+
+    st.markdown(
+        f'<div style="background:{nen};border-left:3px solid {mau};'
+        f'border-radius:8px;padding:.55rem .75rem;margin:.4rem 0;'
+        f'font-size:.84rem;line-height:1.45;color:{COLOR["text"]};">'
+        f'⚠️ {chu}</div>', unsafe_allow_html=True)
+
+
 def _da_mo_rong_quan(loai: str, dac_diem: dict, k: int = 5) -> bool:
     """Phường người dùng chọn có đủ `k` căn không — để nói đúng phạm vi."""
     p = dac_diem.get("phuong_moi")
@@ -1166,6 +1225,9 @@ def render_ket_qua(loai: str, dac_diem: dict, cot_dt: str) -> None:
     dt = dac_diem.get(cot_dt)
 
     st.metric("Giá bán dự kiến", format_vnd(kq["gia"]))
+    # Đặt NGAY DƯỚI con số, trước cả khoảng tin cậy: cảnh báo về độ dày dữ
+    # liệu mà nằm cuối trang thì người dùng đã tin con số xong từ lâu rồi.
+    _canh_bao_phuong_mong(loai, dac_diem)
     st.markdown(
         f"""<div style="background:{COLOR['accent_soft']};border:1px solid {COLOR['accent']}33;
              border-radius:14px;padding:.7rem .9rem;margin:.5rem 0;">
@@ -2103,12 +2165,15 @@ def _choropleth(loai: str, pdk) -> None:
     ), width='stretch')
 
     _chu_giai_vung(v)
+    # Con số trong câu này LẤY TỪ HẰNG SỐ, không gõ tay. Trước đây nó ghi
+    # cứng "chưa đủ 5 căn"; nâng ngưỡng lên 20 mà quên sửa câu thì giao diện
+    # nói một đằng, bản đồ tô một nẻo — và không có gì báo.
     st.caption(
-        f"Tô màu **{v['so_vung_du_tin']}/{v['so_vung']}** phường/xã. Phần xám "
-        f"là phường chưa đủ 5 căn — vẫn vẽ ra để hình Hà Nội liền mạch, chứ "
-        f"không bỏ trống, vì trên nền tối thì chỗ trống trông y hệt phần không "
-        f"thuộc thành phố. Rê chuột lên một phường để xem giá trung vị, khoảng "
-        f"khoảng giá phổ biến, và số căn làm căn cứ.")
+        f"Tô màu **{v['so_vung_du_tin']}/{v['so_vung']}** phường/xã. Phần để "
+        f"trắng gạch là phường **chưa đủ {bd.N_TOI_THIEU_PHUONG} căn** — vẫn "
+        f"vẽ ra để hình Hà Nội liền mạch, chứ không bỏ trống, vì chỗ trống "
+        f"trông y hệt phần không thuộc thành phố. Rê chuột lên một phường để "
+        f"xem giá trung vị, khoảng giá phổ biến, và số căn làm căn cứ.")
     st.caption(
         "Mỗi phường được tô theo những căn **nằm trong ranh giới của nó**, "
         "không phải theo tên phường ghi trong nội dung rao. Ở nội thành, nơi "
