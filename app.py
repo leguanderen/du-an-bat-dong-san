@@ -2911,7 +2911,10 @@ def _luot_moi(tnh, cau: str, dk: dict, doi: list, tiep: bool,
     kq = tnh.tim("", loai, dk_them=dk, k=24)
     return {"cau": cau, "dk": dk, "doi": doi, "tiep": tiep, "loai": loai,
             "so_khop": kq["so_khop"], "bo_qua": kq["bo_qua"],
-            "the": tnh.the_dk(dk, loai), "thong_ke": kq.get("thong_ke", {})}
+            "the": tnh.the_dk(dk, loai), "thong_ke": kq.get("thong_ke", {}),
+            "ghi_chu": kq.get("ghi_chu", []),
+            "hoi_tuoi": tnh.hoi_hop_tuoi(cau),
+            "goi_y_gia": kq.get("goi_y_gia")}
 
 
 def _bong_bong_may(tnh, t: dict, cuoi: bool) -> None:
@@ -2945,6 +2948,32 @@ def _bong_bong_may(tnh, t: dict, cuoi: bool) -> None:
         ten = ", ".join(tnh.NHAN_DK.get(x, tnh.NHAN_CO.get(x, x))
                         for x in t["bo_qua"])
         st.caption(f"⚠️ Không có căn nào thoả hết, mình đã nới: **{ten}**.")
+    g = t.get("goi_y_gia")
+    if g:
+        # Nói như người môi giới: mức giá đã nêu không có, còn ở đó thì
+        # thường bao nhiêu. Con số lấy từ chính dữ liệu, không ước chừng.
+        gia = lambda v: f"{_sole(v / 1e9, 2)} tỷ"
+        if g.get("n_loai_hinh") is not None:
+            lh = g["loai_hinh"].lower()
+            dau = (f'Dữ liệu không có {lh} nào ở {g["noi"]}.'
+                   if g["n_loai_hinh"] == 0 else
+                   f'Ở {g["noi"]} chỉ có {g["n_loai_hinh"]} {lh} trong dữ liệu.')
+            than = f'Nhà đất nói chung ở đó ({_so(g["n"])} căn) giá từ'
+        else:
+            dau = (f'Ở {g["noi"]} không có {g["ten"]} nào dưới '
+                   f'{gia(g["gia_den"])}.')
+            than = f'{_so(g["n"])} căn trong dữ liệu, giá từ'
+        st.markdown(
+            f'<div style="font-size:.86rem;margin-top:.3rem;">{dau} {than} '
+            f'<b>{gia(g["gia_min"])}</b>, một nửa dưới '
+            f'<b>{gia(g["gia_tv"])}</b>.</div>', unsafe_allow_html=True)
+    for x in t.get("ghi_chu", []) if cuoi else []:
+        st.caption(f"ℹ️ {x}")
+    if t.get("hoi_tuoi"):
+        st.caption("ℹ️ Mình chưa tính hướng hợp tuổi từ năm sinh được — cần "
+                   "năm âm lịch và giới tính, sai một chút là ra nhóm ngược. "
+                   "Bạn biết mình hợp nhóm nào thì gõ **“hợp Đông tứ trạch”** "
+                   "hoặc **“hợp Tây tứ trạch”**.")
     if cuoi and t["dk"].get("_phuong_go_cu"):
         st.caption(f"ℹ️ **{t['dk']['_phuong_go_cu'].title()}** giờ thuộc "
                    f"**{t['dk']['phuong_moi']}** sau sáp nhập 1/7/2025.")
@@ -3070,14 +3099,11 @@ def render_tim_nha() -> None:
         elif tnh.la_hoan_tac(cau):
             if lich:
                 lich.pop()
-        elif tnh.la_cau_tiep(cau, dk_hien):
-            tk = lich[-1].get("thong_ke", {}) if lich else {}
-            dk, doi = tnh.doc_chinh_sua(cau, dk_hien, tk, loai_hien)
-            lich.append(_luot_moi(tnh, cau, dk, doi, True, loai_hien))
         else:
-            l2 = tnh.doan_loai(cau, loai_hien)
-            lich.append(_luot_moi(tnh, cau, tnh.phan_tich(cau, l2), [],
-                                  False, l2))
+            tk = lich[-1].get("thong_ke", {}) if lich else {}
+            b = tnh.buoc_hoi_thoai(cau, dk_hien, loai_hien, tk)
+            lich.append(_luot_moi(tnh, cau, b["dk"], b["doi"], b["tiep"],
+                                  b["loai"]))
         st.rerun()
 
 

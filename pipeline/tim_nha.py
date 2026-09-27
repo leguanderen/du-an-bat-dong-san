@@ -39,10 +39,17 @@ CÁCH ĐỌC FILE NÀY
     doc_phong, doc_kich_thuoc    — số phòng; số tầng, mặt tiền, độ rộng ngõ
     doc_dia_diem                 — quận / phường mới / phường cũ / phố / dự án
     doc_dac_diem, doc_sap        — yêu cầu có-không; ý định sắp xếp
+    doc_huong, doc_noi_that      — hướng cửa / ban công / tứ trạch; nội thất
+    doc_tang_can_ho, doc_don_gia — "tầng trung", "tầng 12"; "100 triệu/m2"
     phan_tich                    — gọi hết các hàm trên, trả về dict điều kiện
     tim                          — áp điều kiện lên dữ liệu, xếp hạng, trả kết quả
+    buoc_hoi_thoai               — một lượt chat: câu tiếp hay câu mới, gộp ra sao
 
-Bộ kiểm: `_scratch/kiem_tim_nha.py` — 54 câu thật, chạy trước mỗi lần sửa.
+Bộ kiểm (chạy trước mỗi lần sửa):
+    _scratch/kiem_tim_nha.py         — 69 phép kiểm câu rời
+    _scratch/kiem_hoi_thoai.py       — 18 lượt hội thoại
+    _scratch/kiem_test_case.py       — 39 test case theo nhóm, xuất bảng .md
+    _scratch/do_chinh_xac_bo_doc.py  — đo độ chính xác trên tiêu đề tin rao thật
 """
 from __future__ import annotations
 
@@ -179,6 +186,69 @@ _BIEN_XAP_XI = 0.10          # ±10% quanh con số người dùng nêu
 _SAU_PHAN_LE = r"(?!\s*(?:pn|phong|ngu|wc|vs|ve sinh|tang|m2|m²|met|m\b|ty|tỷ|ti|tỉ|tr|trieu))"
 
 
+# SỐ TIỀN KHÔNG PHẢI GIÁ CĂN
+#
+# Chạy bộ phân tích trên 2.000 tiêu đề tin rao thật, 174 câu đọc sai giá, và
+# gần như tất cả rơi vào mấy kiểu dưới đây. Người mua cũng nói y như vậy:
+#   "190tr/m2"            -> đơn giá, không phải giá căn (xem `doc_don_gia`)
+#   "dòng tiền 30tr/tháng", "thu 140tr/th"  -> tiền thuê, doanh thu
+#   "giảm 300tr", "hạ giá 4 tỷ"             -> mức giảm, không phải giá
+#   "đặt cọc 500tr", "trả trước 1 tỷ", "vay 2 tỷ"
+_TIEN_THEO_THOI_GIAN = r"\s*/?\s*(?:1\s+|mot\s+|moi\s+)?(?:thang|th|nam)\b"
+_TIEN_TREN_M2 = r"\s*(?:/|tren|moi|1)\s*(?:m2|m²|met vuong|met|m)\b"
+_TRUOC_TIEN_KHONG_PHAI_GIA = (
+    "giam", "giam gia", "giam chao", "ha gia", "ha chao", "chenh", "dong tien",
+    "doanh thu", "thu nhap", "thu ve", "coc", "dat coc", "tra truoc", "vay",
+    "ho tro vay", "cho thue", "thue")
+
+
+# "Hạ 4 tỷ" phải xét TRƯỚC khi bỏ dấu: bỏ dấu rồi thì "hạ" thành "ha", trùng
+# với "Hà" trong "Thái Hà 14 tỷ" — xoá nhầm đúng giá căn.
+_GIAM_CO_DAU = re.compile(
+    r"(?:hạ|giảm|cắt lỗ|bớt)(?:\s+(?:sốc|chào|giá|mạnh|sâu|ngay|thêm))*\s*"
+    r"\d+[.,]?\d*\s*(?:tỷ|tỉ|ty|ti|triệu|tr)\b", re.IGNORECASE)
+
+
+def _chu_tien(cau: str) -> str:
+    """Như `_chuan_so` nhưng giữ dấu "/" để nhận ra "tr/m2", "tr/tháng"."""
+    t = _bo_dau(_GIAM_CO_DAU.sub(" ", ud.normalize("NFC", str(cau).lower())))
+    t = re.sub(r"[^a-z0-9\s.,~/-]", " ", t)
+    return " ".join(t.split())
+
+
+def _xoa_tien_khong_phai_gia(t: str) -> str:
+    dv = "|".join(sorted(_DV_TIEN, key=len, reverse=True))
+    so = r"\d+[.,]?\d*"
+    t = re.sub(rf"(?:{so}\s*(?:-|den|toi)\s*)?{so}\s*(?:{dv})"
+               rf"(?:{_TIEN_TREN_M2}|{_TIEN_THEO_THOI_GIAN})", " ", t)
+    truoc = "|".join(sorted(_TRUOC_TIEN_KHONG_PHAI_GIA, key=len, reverse=True))
+    t = re.sub(rf"\b(?:{truoc})\s+(?:gia\s+)?{so}\s*(?:{dv})\b", " ", t)
+    return t
+
+
+def doc_don_gia(cau: str) -> dict:
+    """"dưới 100 triệu/m2", "80-120tr/m2", "tầm 90 tr/m²" -> đơn giá (VND/m²).
+
+    Người mua ở Hà Nội hay nghĩ theo đơn giá hơn là giá cả căn — nó so được
+    giữa căn to căn nhỏ. Dữ liệu có sẵn cột `gia_tren_m2` đủ 100%.
+    """
+    t = _chu_tien(cau)
+    dv = "|".join(sorted(_DV_TIEN, key=len, reverse=True))
+    m = re.search(rf"(\d+[.,]?\d*)\s*(?:{dv})?\s*(?:-|den|toi)\s*"
+                  rf"(\d+[.,]?\d*)\s*({dv}){_TIEN_TREN_M2}", t)
+    if m:
+        k = _DV_TIEN[m.group(3)]
+        a = float(m.group(1).replace(",", ".")) * k
+        b = float(m.group(2).replace(",", ".")) * k
+        return {"gia_m2_tu": min(a, b), "gia_m2_den": max(a, b)}
+    m = re.search(rf"(\d+[.,]?\d*)\s*({dv}){_TIEN_TREN_M2}", t)
+    if not m:
+        return {}
+    so = float(m.group(1).replace(",", ".")) * _DV_TIEN[m.group(2)]
+    h = _huong_gia(so, t[max(0, m.start() - 22):m.start()])
+    return {k.replace("gia_", "gia_m2_"): v for k, v in h.items()}
+
+
 def doc_gia(cau: str) -> dict:
     """Bóc khoảng giá từ câu. Trả về {'gia_tu': ..., 'gia_den': ...} (VND).
 
@@ -198,7 +268,7 @@ def doc_gia(cau: str) -> dict:
     muốn đúng một căn giá 5,00 tỷ. Đây là suy đoán về ý định, nên giao diện
     PHẢI hiện lại "đang lọc: giá ≤ 5 tỷ" để người dùng sửa nếu hiểu sai.
     """
-    t = _chuan_so(cau)
+    t = _xoa_tien_khong_phai_gia(_chu_tien(cau))
     dv = "|".join(sorted(_DV_TIEN, key=len, reverse=True))
     ty = "|".join(_DV_TY)
 
@@ -220,8 +290,17 @@ def doc_gia(cau: str) -> dict:
         truoc = t[max(0, m.start() - 22):m.start()]
         return _huong_gia(so, truoc)
 
-    # (3) một số kèm đơn vị, xem từ đứng trước để biết sàn, trần hay dải
-    m = re.search(rf"(\d+[.,]?\d*)\s*({dv})\b", t)
+    # (3) một số kèm đơn vị, xem từ đứng trước để biết sàn, trần hay dải.
+    #     "b" (billion) chỉ nhận khi KHÔNG phải số nhà: "ngõ 28B" không phải
+    #     28 tỷ.
+    m = None
+    for m_ in re.finditer(rf"(\d+[.,]?\d*)\s*({dv})\b", t):
+        if m_.group(2) == "b" and re.search(
+                r"\b(?:ngo|ngach|hem|so|nha|lo|toa|can|phong|tang|kiet|block)"
+                r"\s*$", t[:m_.start()]):
+            continue
+        m = m_
+        break
     if not m:
         return {}
     so = float(m.group(1).replace(",", ".")) * _DV_TIEN[m.group(2)]
@@ -284,26 +363,43 @@ def doc_dien_tich(cau: str) -> dict:
     NHƯNG chỉ khi trước đó không có chữ chỉ kích thước — nếu không thì
     "mặt tiền 5m" thành "diện tích từ 5 m²".
     """
-    t = _chuan_so(cau)
-    m = re.search(r"(\d+[.,]?\d*)\s*(?:-|den|toi|~)\s*(\d+[.,]?\d*)\s*"
-                  r"(?:m2|m²|met|m)\b", t)
+    t = _chuan_so(str(cau).replace("²", "2"))
+    # Khoảng "50-70m2". Số đầu KHÔNG được dính chữ đằng trước: "120m2 - 7m
+    # mặt tiền" từng bị đọc thành khoảng "2–7 m²" vì chữ số "2" của "m2" bị
+    # lấy làm đầu khoảng. Và đầu khoảng phải từ 10 m² trở lên: "vành đai 2.5
+    # - 30m2" không phải khoảng diện tích 2,5–30.
+    m = re.search(r"(?<![a-z\d.,])(\d+[.,]?\d*)\s*(?:-|den|toi|~)\s*"
+                  r"(\d+[.,]?\d*)\s*(?:m2|m²|met|m)\b", t)
     if m:
         a = float(m.group(1).replace(",", "."))
         b = float(m.group(2).replace(",", "."))
-        return {"dt_tu": min(a, b), "dt_den": max(a, b)}
+        if min(a, b) >= 10:
+            return {"dt_tu": min(a, b), "dt_den": max(a, b)}
 
-    for m in re.finditer(r"(\d+[.,]?\d*)\s*(m2|m²|met vuong|met|m)\b", t):
-        truoc = t[max(0, m.start() - 24):m.start()]
-        if m.group(2) == "m" and any(
-                re.search(rf"\b{re.escape(w)}\b", truoc)
-                for w in _TRUOC_KHONG_PHAI_DT):
-            continue                    # đây là một chiều dài, không phải diện tích
-        so = float(m.group(1).replace(",", "."))
-        if _ke_ngay_truoc(truoc, _TU_DUOI):
-            return {"dt_den": so}
-        # "60 m2" một mình: hiểu là TỪ 60 trở lên. Người mua nói diện tích
-        # thường là nói mức tối thiểu họ cần ở được — ngược với tiền.
-        return {"dt_tu": so}
+    # Hai lượt: có đơn vị diện tích rõ ("m2", "m²") trước, rồi mới tới "m"
+    # trần trụi. "30m2 x 6 tầng, ô tô đỗ cách 20m" — số 20 đứng sau nhưng
+    # là khoảng cách; số 30 kèm "m2" mới là diện tích.
+    for ro in (True, False):
+        for m in re.finditer(r"(\d+[.,]?\d*)\s*(m2|m²|met vuong|met|m)\b", t):
+            if ro != (m.group(2) in ("m2", "m²", "met vuong")):
+                continue
+            truoc = t[max(0, m.start() - 24):m.start()]
+            sau = t[m.end():m.end() + 12]
+            if not ro and (
+                    any(re.search(rf"\b{re.escape(w)}\b", truoc)
+                        for w in _TRUOC_KHONG_PHAI_DT)
+                    # "50m ra ô tô", "400m lên cầu" là quãng đường;
+                    # "6,5m mặt tiền" là chiều ngang
+                    or re.match(r"\s*(?:ra|toi|den|cach|len|xuong|mat tien|mt"
+                                r"|ngang|rong|sau|dai)\b", sau)
+                    or re.search(r"\bcach(?:\s+[a-z]+){0,2}\s*$", truoc)):
+                continue            # đây là một chiều dài, không phải diện tích
+            so = float(m.group(1).replace(",", "."))
+            if _ke_ngay_truoc(truoc, _TU_DUOI):
+                return {"dt_den": so}
+            # "60 m2" một mình: hiểu là TỪ 60 trở lên. Người mua nói diện tích
+            # thường là nói mức tối thiểu họ cần ở được — ngược với tiền.
+            return {"dt_tu": so}
     return {}
 
 
@@ -318,10 +414,18 @@ def doc_phong(cau: str) -> dict:
     """
     t = _chuan_so(cau)
     ra = {}
-    m = re.search(r"(\d+)\s*(?:pn|phong ngu|ngu|phong)\b", t)
+    # `(?![a-z])`, KHÔNG PHẢI `\b`.
+    #
+    # "2PN2WC" là cách viết rất phổ biến trên tin rao. `\b` là ranh giới giữa
+    # ký tự-của-từ và ký tự-không-phải-từ — mà chữ số CŨNG là ký tự của từ, nên
+    # giữa "pn" và "2" trong "2pn2wc" không hề có ranh giới. Regex trượt, và
+    # câu "chung cư 2PN2WC" chỉ bóc được 2 phòng vệ sinh, MẤT số phòng ngủ.
+    # Điều mình thật sự muốn nói là "sau đó không còn chữ cái nào nữa" — để
+    # "2pn" không khớp nhầm vào giữa một từ dài hơn — và chữ số thì được.
+    m = re.search(r"(\d+)\s*(?:pn|phong ngu|ngu|phong)(?![a-z])", t)
     if m:
         ra["so_phong_ngu"] = int(m.group(1))
-    m = re.search(r"(\d+)\s*(?:wc|vs|ve sinh|toilet|nha ve sinh)\b", t)
+    m = re.search(r"(\d+)\s*(?:wc|vs|ve sinh|toilet|nha ve sinh)(?![a-z])", t)
     if m:
         ra["so_phong_vs"] = int(m.group(1))
     return ra
@@ -340,9 +444,11 @@ def doc_kich_thuoc(cau: str) -> dict:
     t = _chuan_so(cau)
     ra: dict = {}
 
-    m = re.search(r"(\d+)\s*tang\b", t)
+    # "3,5 tầng" (3 tầng + tum) phải đọc cả phần lẻ; bản trước lấy mỗi số 5.
+    m = re.search(r"(?<!\d[.,])(?<!\d)(\d+(?:[.,]5)?)\s*tang\b", t)
     if m:
-        so = int(m.group(1))
+        so = float(m.group(1).replace(",", "."))
+        so = int(so) if so.is_integer() else so
         truoc = t[max(0, m.start() - 24):m.start()]
         if _ke_ngay_truoc(truoc, _TU_DUOI):
             ra["tang_den"] = so
@@ -527,7 +633,11 @@ def doc_dia_diem(cau: str, loai: str) -> dict:
     Tên KHÁC nhau ở các cấp khác nhau thì giữ cả: "nhà phố Trung Kính, Cầu
     Giấy" là một ý định thu hẹp hợp lệ.
     """
-    t = _chuan(cau)
+    # Dấu ngắt câu thành một "từ chặn" để tên không khớp XUYÊN qua nó: tiêu
+    # đề "THÁI HÀ - ĐỐNG ĐA" sau khi bỏ dấu gạch thành "thai ha dong da", và
+    # cụm "ha dong" ở giữa khớp luôn quận Hà Đông. Dấu chấm không tính vì
+    # người ta viết tắt "Q.Cầu Giấy", "P.Dịch Vọng".
+    t = _chuan(re.sub(r"[-–—,;:|/()!?]+", " qqq ", _bo_dau(cau)))
     t_so = _thay_so_bang_chu(t)        # "quan 2 ba trung" -> "quan hai ba trung"
 
     def khop(cap):
@@ -584,8 +694,23 @@ def doc_dia_diem(cau: str, loai: str) -> dict:
         ra["duong_pho"] = goc
         break
 
+    def nam_trong_ten_quan(k: str) -> bool:
+        """Tên phường này có phải chỉ là MỘT PHẦN của tên quận vừa khớp?
+
+        Bộ chống trùng ở trên so ĐÚNG TỪNG CHỮ: "cau giay" (phường) với "cau
+        giay" (quận). Nhưng sau sáp nhập có phường tên "Từ Liêm", và nó nằm
+        lọt thỏm trong "Nam Từ Liêm" lẫn "Bắc Từ Liêm". So từng chữ thì "tu
+        liem" không trùng "nam tu liem", nên câu "chung cư ở Nam Từ Liêm" bị
+        gán thêm `phường = Từ Liêm` — thu kết quả từ cả quận xuống một phường,
+        mà người dùng chưa hề nhắc tới phường nào.
+        """
+        return any(k != q and re.search(rf"\b{re.escape(k)}\b", q)
+                   for q in ten_quan)
+
     for k, goc in hit["phuong"]:
         if k in ten_quan and not co_tien_to(k, ("phuong", "xa", "thi tran")):
+            continue
+        if nam_trong_ten_quan(k) and not co_tien_to(k, ("phuong", "xa")):
             continue
         if ra.get("duong_pho") and k == _chuan(ra["duong_pho"]):
             continue
@@ -604,7 +729,28 @@ def doc_dia_diem(cau: str, loai: str) -> dict:
             ra["_phuong_go_cu"] = k     # để giao diện nói "hiểu tên cũ -> mới"
             break
 
+    # Tên quận nằm LỌT TRONG một tên dài hơn đã nhận thì không phải nói về
+    # quận: "Tả Thanh Oai" là một xã của huyện Thanh TRÌ, chữ "Thanh Oai" ở
+    # đó chỉ là một phần tên xã. Đo trên 3.000 tiêu đề tin rao, lỗi này chiếm
+    # gần một phần năm số ca đọc sai quận.
+    da_nhan = [k for k, _ in hit["duong"] + hit["phuong"] + hit["phuong_cu"]
+               if ra.get("_phuong_go_cu") == k
+               or _chuan(ra.get("duong_pho") or "") == k
+               or _chuan(ra.get("phuong_moi") or "") == k
+               or _chuan(ra.get("duong_pho") or "").endswith(" " + k)]
+
+    def chi_nam_trong_ten_khac(q: str) -> bool:
+        dai = [k for k in da_nhan if k != q and re.search(rf"\b{q}\b", k)]
+        if not dai:
+            return False
+        con = t
+        for k in dai:
+            con = re.sub(rf"\b{re.escape(k)}\b", " ", con)
+        return re.search(rf"\b{re.escape(q)}\b", con) is None
+
     for k, goc in hit["quan"]:
+        if chi_nam_trong_ten_khac(k):
+            continue
         ra["quan_huyen"] = goc
         break
     return ra
@@ -650,6 +796,10 @@ _LOAI_HINH = [
     ("Nhà biệt thự",          ("biet thu", "villa")),
 ]
 
+# Từ khoá loại hình mà ĐỒNG THỜI là tên một số đo. Có số đi liền sau thì đó là
+# số đo ("mặt tiền 5m"), không phải loại nhà. Xem ghi chú trong `phan_tich`.
+_LOAI_HINH_CUNG_LA_SO_DO = {"mat tien", "mat duong"}
+
 _PHAP_LY = [
     (("Sổ hồng riêng", "Đã có sổ"), ("so hong", "so do", "co so", "so rieng",
                                      "day du giay to", "phap ly ro")),
@@ -689,13 +839,16 @@ def doc_dac_diem(cau: str, loai: str) -> dict:
     df = vs.nap(loai)["df"]
     ra: dict = {"co": [], "khong": [], "loai_hinh_tru": []}
 
+    # "căn hộ Tây Hồ" chứa cụm "hộ Tây" -> "ho tay" = hồ Tây, tức "gần công
+    # viên, hồ". Gộp "căn hộ" thành một từ trước khi dò tiện ích.
+    t_ti = re.sub(r"\bcan ho\b", "canho", t)
     for cot, tu in _CO_KHONG:
         if cot not in df.columns:
             continue
-        vi = _tim_cum(t, tu)
+        vi = _tim_cum(t_ti, tu)
         if vi is None:
             continue
-        (ra["khong"] if _phu_dinh_truoc(t, vi) else ra["co"]).append(cot)
+        (ra["khong"] if _phu_dinh_truoc(t_ti, vi) else ra["co"]).append(cot)
 
     if loai == "nhadat":
         for nhan, tu in _LOAI_HINH:
@@ -709,7 +862,15 @@ def doc_dac_diem(cau: str, loai: str) -> dict:
             # loại hình "Nhà mặt phố, mặt tiền" — trái hẳn chữ "trong ngõ" ở
             # ngay sau, và thu kết quả xuống còn 1 căn. Có số đi liền sau thì
             # đó là số đo.
-            if re.match(r"\s*(?:rong\s*)?\d", t[vi + len(_cum_khop(t, tu)):]):
+            #
+            # NHƯNG CHỈ ÁP CHO NHỮNG TỪ VỪA LÀ LOẠI NHÀ VỪA LÀ TÊN MỘT SỐ ĐO.
+            # Bản đầu áp cho mọi loại hình, nên "biệt thự 200m2 ở Hoàn Kiếm"
+            # mất luôn loại hình "biệt thự": 200m2 là DIỆN TÍCH của căn, không
+            # phải kích thước của chữ "biệt thự". "Mặt tiền 5m" thì khác — mặt
+            # tiền đúng là một chiều đo. Chỉ những từ như thế mới cần chốt này.
+            cum = _cum_khop(t, tu)
+            if cum in _LOAI_HINH_CUNG_LA_SO_DO and \
+                    re.match(r"\s*(?:rong\s*)?\d", t[vi + len(cum):]):
                 continue
             if _phu_dinh_truoc(t, vi):
                 ra["loai_hinh_tru"].append(nhan)
@@ -729,6 +890,258 @@ def doc_dac_diem(cau: str, loai: str) -> dict:
     if vi is not None and not _phu_dinh_truoc(t, vi):
         ra["kc_den"] = NGUONG_TRUNG_TAM_KM
     return ra
+
+
+# =============================================================================
+# HƯỚNG NHÀ, VỊ TRÍ TẦNG, NỘI THẤT
+# =============================================================================
+# Ba thứ người mua hỏi rất nhiều mà bản trước bỏ qua, dù dữ liệu có cột:
+#
+#                     chung cư   nhà đất
+#   huong_cua          37,7%      19,7%
+#   huong_ban_cong     43,4%        —
+#   noi_that           64,1%      55,9%
+#   tang_so            19,9%        —
+#
+# Độ phủ thấp, nên lọc theo chúng là lọc trên PHẦN tin có ghi. Tin không ghi
+# hướng không có nghĩa là hướng xấu, chỉ là người rao không điền. `tim()` vì
+# thế luôn kèm một dòng ghi chú nói rõ tỉ lệ này — xem `_DO_PHU_THAP`.
+
+# Hướng ghép phải đứng TRƯỚC hướng đơn, nếu không "đông nam" bị cắt thành
+# "đông" + "nam" — hai hướng khác hẳn nhau.
+_HUONG = [
+    ("Đông Nam", ("dong nam", "dn")),
+    ("Đông Bắc", ("dong bac", "db")),
+    ("Tây Nam",  ("tay nam", "tn")),
+    ("Tây Bắc",  ("tay bac", "tb")),
+    ("Đông",     ("dong",)),
+    ("Tây",      ("tay",)),
+    ("Nam",      ("nam",)),
+    ("Bắc",      ("bac",)),
+]
+# Chữ đi sau một hướng mà biến nó thành TÊN ĐỊA DANH: Tây Hồ, Tây Mỗ, Tây
+# Tựu, Đông Anh, Đống Đa, Đông Ngạc, Bắc/Nam Từ Liêm, phố Tây Sơn... "nhà
+# hướng Nam Đống Đa" nghĩa là hướng Nam, ở Đống Đa — không phải Nam + Đông.
+_SAU_LA_DIA_DANH = ("ho", "mo", "tuu", "anh", "da", "ngac", "tu liem", "hong",
+                    "dinh", "my", "du", "tac", "son", "thang long", "hoi",
+                    "phuong", "ket", "thanh", "giang", "ninh", "tu trach")
+_MAU_HUONG = "(?:" + "|".join(re.escape(w) for _, tu in _HUONG for w in tu) + \
+    r")(?!\s+(?:" + "|".join(_SAU_LA_DIA_DANH) + r")\b)"
+_HUONG_THEO_TU = {w: nhan for nhan, tu in _HUONG for w in tu}
+
+# Bát trạch chia 8 hướng làm hai nhóm. Người ta nói "hợp Đông tứ trạch" thay
+# vì liệt kê bốn hướng. Hệ thống KHÔNG tự tính mệnh từ năm sinh: phép tính đó
+# cần năm âm lịch và giới tính, đoán sai một trong hai là ra nhóm ngược lại.
+_TU_TRACH = {
+    "dong tu trach": ("Đông tứ trạch", ["Bắc", "Nam", "Đông", "Đông Nam"]),
+    "tay tu trach": ("Tây tứ trạch", ["Tây Bắc", "Tây Nam", "Đông Bắc", "Tây"]),
+}
+
+# Phủ định cho hướng phải SÁT chữ "hướng". Cửa sổ 26 ký tự của
+# `_phu_dinh_truoc` quá rộng ở đây: "nhà không ở ngõ, hướng Tây" sẽ thành
+# "tránh hướng Tây". "tránh" chỉ có nghĩa phủ định với hướng nên để riêng.
+_PHU_DINH_HUONG = re.compile(
+    r"\b(?:khong|ko|tranh|tru|ngoai tru|khoi|dung)\s+"
+    r"(?:(?:lay|chon|can|muon|mua|thich|phai|nha|can ho|cua|cua chinh|"
+    r"ban cong|o|xem)\s+)*$")
+
+
+def _cac_huong(chuoi: str) -> list[str]:
+    """"dong nam va tay" -> ["Đông Nam", "Tây"], giữ thứ tự, bỏ trùng."""
+    ra = []
+    for m in re.finditer(rf"\b{_MAU_HUONG}\b", chuoi):
+        nhan = _HUONG_THEO_TU[m.group(0)]
+        if nhan not in ra:
+            ra.append(nhan)
+    return ra
+
+
+_TU_HOP_TUOI = ("hop tuoi", "hop menh", "hop phong thuy", "sinh nam",
+                "tuoi toi", "menh toi", "cung menh", "menh kim", "menh moc",
+                "menh thuy", "menh hoa", "menh tho")
+
+
+def hoi_hop_tuoi(cau: str) -> bool:
+    """Người dùng hỏi hướng hợp tuổi/mệnh mà chưa nói nhóm tứ trạch.
+
+    Hệ thống không tự tính: cung mệnh bát trạch cần năm sinh ÂM lịch (sinh
+    tháng 1 dương lịch thường vẫn thuộc năm âm trước) và giới tính, sai một
+    trong hai là ra nhóm ngược lại — tức gợi ý đúng những hướng người ta
+    muốn tránh. Nên chỉ nhận ra câu hỏi và chỉ cách nói để lọc được.
+    """
+    t = _chuan(cau)
+    return _tim_cum(t, _TU_HOP_TUOI) is not None and \
+        _tim_cum(t, tuple(_TU_TRACH)) is None
+
+
+def _chuan_giu_noi(cau: str) -> str:
+    """Như `_chuan` nhưng giữ dấu phẩy và gạch chéo, tách riêng ra thành từ.
+
+    Hai hướng liền nhau PHẢI có dấu nối ("Nam, Đông Nam", "Nam hoặc Đông
+    Nam"). Không có dấu nối thì chữ thứ hai là phần của một tên khác.
+    """
+    t = re.sub(r"[-–—;:|()!?]+", ",", _bo_dau(cau))
+    t = " ".join(re.sub(r"[^a-z0-9\s,/]", " ", t).split())
+    return re.sub(r"\s*([,/])\s*", r" \1 ", t)
+
+
+_NOI_HUONG = r"(?:\s+(?:,|/|va|hoac|hay|voi)(?:\s+(?:va|hoac|hay))?\s+)"
+_MAU_CUM_HUONG = re.compile(
+    rf"\b(?P<dau>(?:(?:cua chinh|cua|ban cong|nha|can ho|can)\s+)?"
+    rf"huong(?:\s+(?:cua chinh|cua|ban cong|nha|chinh))?"
+    rf"|ban cong)\s+"
+    rf"(?P<huong>{_MAU_HUONG}(?:{_NOI_HUONG}{_MAU_HUONG})*)\b")
+
+
+def _quet_huong(cau: str) -> tuple[str, list]:
+    """Tìm mọi cụm nói về hướng. Trả (câu đã chuẩn hoá, [(đầu, cuối, khoá,
+    các hướng)]). Tách riêng để `phan_tich` XOÁ được các cụm này trước khi
+    đọc địa danh — "hướng Nam, Đông Nam" không được thành phường cũ "Nam
+    Đồng".
+    """
+    t = _chuan_giu_noi(cau)
+    ra = []
+    for m in _MAU_CUM_HUONG.finditer(t):
+        dau, ds = m.group("dau"), _cac_huong(m.group("huong"))
+        if not ds:
+            continue
+        if "ban cong" in dau:
+            khoa = "huong_ban_cong"
+        elif "cua" in dau:
+            khoa = "huong_cua"
+        else:
+            khoa = "huong"
+        if _PHU_DINH_HUONG.search(t[:m.start()]):
+            khoa = "huong_tru"
+        ra.append((m.start(), m.end(), khoa, ds))
+    for cum, (ten, ds) in _TU_TRACH.items():
+        m = re.search(rf"\b{cum}\b", t)
+        if m and not _PHU_DINH_HUONG.search(t[:m.start()]):
+            ra.append((m.start(), m.end(), "_tu_trach", (ten, ds)))
+    return t, ra
+
+
+def bo_cum_huong(cau: str) -> str:
+    """Câu đã xoá các cụm nói về hướng — để đọc địa danh cho sạch."""
+    t, cum = _quet_huong(cau)
+    for a, b, _, _ in sorted(cum, reverse=True):
+        t = t[:a] + " , " + t[b:]
+    return t
+
+
+def doc_huong(cau: str, loai: str) -> dict:
+    """Bóc hướng cửa / hướng ban công / hướng chung / hướng cần tránh.
+
+    CHỈ NHẬN HƯỚNG ĐI SAU CHỮ "HƯỚNG" (hoặc "ban công"). "Nam", "Tây", "Đông"
+    nằm trong tên rất nhiều địa danh — Nam Từ Liêm, Tây Hồ, Hà Đông, Đông Anh
+    — và "năm" còn là con số. Đọc trần trụi thì "chung cư Tây Hồ" thành
+    "hướng Tây".
+
+    "hướng X" không nói cửa hay ban công thì với chung cư lấy CẢ HAI (cửa hoặc
+    ban công là X): người mua căn hộ nói "căn hướng Đông Nam" thường là nói
+    ban công, nhưng không chắc, nên không đoán thay họ. Nhà đất chỉ có hướng
+    cửa; "ban công hướng X" ở nhà đất sẽ bị `tim()` báo là đã nới, vì không
+    có cột để lọc.
+
+    Tứ trạch chỉ dùng khi người dùng KHÔNG nêu hướng cụ thể — nêu rồi thì
+    hướng cụ thể thắng.
+    """
+    ra: dict = {}
+    tu_trach = None
+    for _, _, khoa, ds in _quet_huong(cau)[1]:
+        if khoa == "_tu_trach":
+            tu_trach = tu_trach or ds
+            continue
+        cu = ra.setdefault(khoa, [])
+        cu.extend(x for x in ds if x not in cu)
+    if tu_trach and not (ra.get("huong") or ra.get("huong_cua")):
+        ra["huong"] = list(tu_trach[1])
+        ra["_tu_trach"] = tu_trach[0]
+    return ra
+
+
+# "tầng trung" với chung cư Hà Nội: người trong nghề chia thấp dưới 10, trung
+# 10–20, cao trên 20. Ngưỡng hiện ra trên thẻ điều kiện nên người dùng thấy
+# và sửa được nếu họ nghĩ khác.
+_VI_TRI_TANG = [
+    (("tang thap",),                 (None, 9)),
+    (("tang trung", "tang giua"),    (10, 20)),
+    (("tang cao",),                  (21, None)),
+]
+
+
+def doc_tang_can_ho(cau: str, loai: str) -> dict:
+    """"tầng trung", "tầng 12", "tầng 15 trở lên" — chỉ cho chung cư.
+
+    Nhà đất thì "tầng" là TỔNG số tầng của căn nhà, đã có `doc_kich_thuoc`.
+    """
+    if loai != "chungcu":
+        return {}
+    t = _chuan(cau)
+    for tu, (a, b) in _VI_TRI_TANG:
+        vi = _tim_cum(t, tu)
+        if vi is not None and not _phu_dinh_truoc(t, vi):
+            ra = {}
+            if a:
+                ra["tang_tu"] = a
+            if b:
+                ra["tang_den"] = b
+            return ra
+    # "tầng 12" (số đứng SAU chữ tầng) là tầng của căn; "12 tầng" (số đứng
+    # trước) là chiều cao toà nhà — đã có hàm khác lo và nghĩa khác hẳn.
+    m = re.search(r"\btang\s+(?:so\s+)?(\d{1,2})\b(?P<sau>\s*(?:tro len|tro xuong"
+                  r"|den\s+\d{1,2}|\-\s*\d{1,2})?)", _chuan_so(cau))
+    if m:
+        so, sau = int(m.group(1)), m.group("sau").strip()
+        if sau.startswith("tro len"):
+            return {"tang_tu": so}
+        if sau.startswith("tro xuong"):
+            return {"tang_den": so}
+        m2 = re.search(r"(\d{1,2})$", sau)
+        if m2:
+            return {"tang_tu": so, "tang_den": int(m2.group(1))}
+        return {"tang_tu": so, "tang_den": so}
+    return {}
+
+
+_NOI_THAT = [
+    (["Nội thất cao cấp"],
+     ("noi that cao cap", "full cao cap", "do cao cap", "noi that xin")),
+    (["Nội thất đầy đủ", "Nội thất cao cấp"],
+     ("full do", "full noi that", "noi that day du", "day du noi that",
+      "du do", "day du do", "full", "co noi that", "xach vali", "xach vali vao o",
+      "chi viec vao o")),
+    (["Hoàn thiện cơ bản"],
+     ("hoan thien co ban", "noi that co ban", "co ban")),
+    (["Bàn giao thô"],
+     ("ban giao tho", "noi that tho", "nha tho", "can tho", "de tu thiet ke")),
+]
+
+
+def doc_noi_that(cau: str) -> dict:
+    """"full đồ", "nội thất cao cấp", "bàn giao thô", "hoàn thiện cơ bản".
+
+    "full đồ" lấy cả "đầy đủ" lẫn "cao cấp": căn cao cấp cũng là căn đủ đồ,
+    loại ra thì người mua mất đúng những căn tốt nhất.
+    "không cần nội thất" KHÔNG thành "bàn giao thô" — không cần thì cũng chẳng
+    phản đối có sẵn, nên bỏ qua.
+    """
+    t = _chuan(cau)
+    for nhan, tu in _NOI_THAT:
+        vi = _tim_cum(t, tu)
+        if vi is None or _phu_dinh_truoc(t, vi):
+            continue
+        cum = _cum_khop(t, tu)
+        # "co ban" và "full" trần trụi quá chung, chỉ nhận khi câu có nói
+        # tới nội thất / đồ đạc ở đâu đó.
+        if cum in ("co ban", "full") and _tim_cum(
+                t, ("noi that", "do dac", "do", "ban giao")) is None:
+            continue
+        # "Cần Thơ" là thành phố, không phải căn thô.
+        if cum == "can tho" and "noi that" not in t and "ban giao" not in t:
+            continue
+        return {"noi_that": list(nhan)}
+    return {}
 
 
 # =============================================================================
@@ -821,11 +1234,19 @@ def phan_tich(cau: str, loai: str) -> dict:
     """
     dk: dict = {}
     dk.update(doc_gia(cau))
+    dk.update(doc_don_gia(cau))
     dk.update(doc_dien_tich(cau))
     dk.update(doc_phong(cau))
     dk.update(doc_kich_thuoc(cau))
-    dk.update(doc_dia_diem(cau, loai))
+    # Đọc địa danh trên câu ĐÃ XOÁ cụm hướng: "hướng Nam, Đông Nam" có
+    # chứa "Nam Đồng" — tên một phường cũ.
+    dk.update(doc_dia_diem(bo_cum_huong(cau), loai))
     dk.update(doc_sap(cau))
+    dk.update(doc_huong(cau, loai))
+    dk.update(doc_noi_that(cau))
+    # Tầng của căn hộ chỉ ghi đè khi `doc_kich_thuoc` chưa bóc được gì.
+    for k, v in doc_tang_can_ho(cau, loai).items():
+        dk.setdefault(k, v)
 
     dd = doc_dac_diem(cau, loai)
     for k in ("co", "khong", "loai_hinh_tru"):
@@ -856,7 +1277,17 @@ NHAN_DK = {
     "du_an": "dự án", "kc_den": "khoảng cách tới trung tâm",
     "loai_hinh": "loại hình", "loai_hinh_tru": "loại trừ loại hình",
     "phap_ly": "pháp lý", "co": "yêu cầu thêm", "khong": "không muốn",
+    "huong": "hướng", "huong_cua": "hướng cửa",
+    "huong_ban_cong": "hướng ban công", "huong_tru": "tránh hướng",
+    "noi_that": "nội thất", "tang": "tầng",
+    "gia_m2_tu": "đơn giá từ", "gia_m2_den": "đơn giá đến",
 }
+
+# Cột có độ phủ thấp: lọc theo nó là lọc trên phần tin CÓ GHI. Phải nói ra,
+# nếu không người dùng tưởng cả thị trường chỉ có ngần ấy căn.
+_COT_CUA_DK = {"huong": "huong_cua", "huong_cua": "huong_cua",
+               "huong_ban_cong": "huong_ban_cong", "noi_that": "noi_that"}
+_DO_PHU_THAP = 0.70
 
 NHAN_CO = {
     "nhac_o_to": "ô tô vào được", "nhac_thang_may": "có thang máy",
@@ -883,6 +1314,68 @@ def _bang_lech(loai: str) -> pd.DataFrame:
     """
     import tinh_nang as tn
     return tn._khoang_ngoai_mau(loai)
+
+
+_KHOA_NOI = ("du_an", "duong_pho", "phuong_moi", "quan_huyen")
+
+
+def _goi_y_gia(d: pd.DataFrame, dk: dict, bo_qua: list, cot_dt: str):
+    """Giá thực tế ở nơi người dùng hỏi, khi mức giá họ nêu không có căn nào.
+
+    Câu "biệt thự Hoàn Kiếm 1 tỷ" không khớp căn nào. Nới điều kiện thì hoặc
+    mất chữ "Hoàn Kiếm", hoặc mất mức giá, hoặc mất chữ "biệt thự" — kiểu gì
+    cũng ra một danh sách người ta không hỏi. Một người môi giới sẽ nói
+    thẳng: "ở đó loại này rẻ nhất cũng cỡ X tỷ". Hàm này làm đúng việc ấy,
+    bằng số của chính dữ liệu.
+
+    Chỉ chạy khi có trần giá, có nơi chốn, và một điều kiện CỐT LÕI (giá,
+    nơi chốn, loại hình, số phòng, diện tích) đã phải nới. Nới hướng hay nội
+    thất thì không cần — đó là chi tiết, không phải lý do giá không khớp.
+    Trả None khi nơi đó quá ít tin để nói gì (dưới 5 căn).
+    """
+    if "gia_den" not in dk:
+        return None
+    noi = [k for k in _KHOA_NOI if dk.get(k)]
+    cot_loi = {"gia_den", "loai_hinh", "so_phong_ngu", "dt_tu", "dt_den", *noi}
+    if not noi or not (cot_loi & set(bo_qua)):
+        return None
+    m = pd.Series(True, index=d.index)
+    for k in noi:
+        cot = {"du_an": "du_an_clean"}.get(k, k)
+        if cot in d.columns:
+            m &= d[cot] == dk[k]
+
+    # Đúng thứ người ta hỏi (số phòng, diện tích, loại hình), bỏ mỗi giá.
+    # Quá ít căn thì bỏ dần các chi tiết đó, và nói ra là đã bỏ.
+    chi_tiet = []
+    if dk.get("so_phong_ngu"):
+        chi_tiet.append((f"{dk['so_phong_ngu']} phòng ngủ",
+                         d["so_phong_ngu"] == dk["so_phong_ngu"]))
+    if dk.get("dt_tu"):
+        chi_tiet.append((f"từ {dk['dt_tu']:.0f} m²", d[cot_dt] >= dk["dt_tu"]))
+    if dk.get("dt_den"):
+        chi_tiet.append((f"tới {dk['dt_den']:.0f} m²",
+                         d[cot_dt] <= dk["dt_den"]))
+    lh, n_lh = dk.get("loai_hinh"), None
+    if lh:
+        m_lh = m & (d["loai_hinh"] == lh)
+        n_lh = int(d.loc[m_lh, "TARGET_gia_vnd"].notna().sum())
+        if n_lh >= 5:
+            m, n_lh = m_lh, None
+    for _, mk in chi_tiet:
+        m &= mk.fillna(False)
+    g = d.loc[m, "TARGET_gia_vnd"].dropna()
+    # Dưới 5 căn thì không đủ để nói "giá ở đó thường là…". Và nếu vẫn có
+    # căn dưới mức giá đã nêu thì giá không phải chỗ vướng — không cần gợi ý.
+    if len(g) < 5 or (g <= dk["gia_den"]).any():
+        return None
+    ten = (lh.lower() if lh and n_lh is None else "căn") + \
+        "".join(" " + x for x, _ in chi_tiet[:1]) + \
+        "".join(", " + x for x, _ in chi_tiet[1:])
+    return {"noi": str(dk[noi[0]]), "loai_hinh": lh, "n_loai_hinh": n_lh,
+            "ten": ten, "n": int(len(g)), "gia_min": float(g.min()),
+            "gia_q25": float(g.quantile(.25)), "gia_tv": float(g.median()),
+            "gia_den": float(dk["gia_den"])}
 
 
 def tim(cau: str, loai: str, dk_them: dict | None = None,
@@ -914,46 +1407,96 @@ def tim(cau: str, loai: str, dk_them: dict | None = None,
     d = df[df["TARGET_gia_vnd"].notna()].copy()
     # Ghép mức lệch so với mặt bằng vào mọi kết quả, không chỉ khi sắp theo nó:
     # đây là thông tin người mua cần thấy ngay cạnh từng căn.
-    try:
-        lech = _bang_lech(loai)[["lech_phan_tram", "gia_du_doan",
-                                 "khoang_duoi", "khoang_tren", "vi_the"]]
-        d = d.join(lech, how="left")
-    except Exception:
-        pass
+    # Gói triển khai thường đã có sẵn các cột này (tính trước lúc đóng gói),
+    # nên chỉ ghép những cột còn THIẾU. Ghép trùng tên cột thì pandas báo lỗi.
+    can = ["lech_phan_tram", "gia_du_doan", "khoang_duoi", "khoang_tren",
+           "vi_the"]
+    thieu = [c for c in can if c not in d.columns]
+    if thieu:
+        try:
+            d = d.join(_bang_lech(loai)[thieu], how="left")
+        except Exception as e:      # thiếu cột lệch thì vẫn tìm được, chỉ
+            import logging          # không xếp theo "rẻ hơn mặt bằng"
+            logging.getLogger(__name__).warning("Không ghép được mức lệch: %s", e)
 
     def _co_cot(c):
         return c in d.columns
 
+    def _huong_bat_ky():
+        return d["huong_cua"] if _co_cot("huong_cua") else \
+            pd.Series(np.nan, index=d.index, dtype=object)
+
+    def _loc_huong(v):
+        # "hướng X" chung chung: chung cư lấy cửa HOẶC ban công là X.
+        m = _huong_bat_ky().isin(v)
+        if _co_cot("huong_ban_cong"):
+            m = m | d["huong_ban_cong"].isin(v)
+        return m
+
+    # THỨ TỰ NÀY LÀ THỨ TỰ ƯU TIÊN KHI PHẢI NỚI. Điều kiện đứng trước được
+    # áp trước và chỉ bị bỏ khi TỰ NÓ đã không có căn nào; điều kiện đứng sau
+    # bị bỏ trước khi đụng vào cái đứng trước.
+    #
+    # Bản trước để giá đứng đầu, nơi chốn gần cuối. Hậu quả: "căn hộ Cầu Giấy
+    # 3 tỷ" rồi thêm "tầng trung" thì hệ thống bỏ luôn chữ Cầu Giấy và đưa
+    # căn ở quận khác — trong khi người ta hỏi Cầu Giấy. Một người môi giới
+    # sẽ giữ nơi chốn và nói thẳng mức giá thật ở đó (xem `_goi_y_gia`), rồi
+    # mới tới giá, diện tích, số phòng, và cuối cùng là các chi tiết như
+    # hướng, nội thất.
     dieu_kien = [
-        ("gia_tu", lambda v: d["TARGET_gia_vnd"] >= v),
-        ("gia_den", lambda v: d["TARGET_gia_vnd"] <= v),
-        ("dt_tu", lambda v: d[cot_dt] >= v),
-        ("dt_den", lambda v: d[cot_dt] <= v),
-        ("so_phong_ngu", lambda v: d["so_phong_ngu"] == v),
-        ("so_phong_vs", lambda v: d["so_phong_vs"] == v),
-        ("tang_tu", lambda v: d[cot_tang] >= v if _co_cot(cot_tang) else None),
-        ("tang_den", lambda v: d[cot_tang] <= v if _co_cot(cot_tang) else None),
-        ("mt_tu", lambda v: d["mat_tien_m"] >= v if _co_cot("mat_tien_m") else None),
-        ("ngo_tu", lambda v: d["duong_rong_m"] >= v
-         if _co_cot("duong_rong_m") else None),
-        ("kc_den", lambda v: d["kc_trung_tam_km"] <= v
-         if _co_cot("kc_trung_tam_km") else None),
         ("du_an", lambda v: d["du_an_clean"] == v if _co_cot("du_an_clean") else None),
         ("duong_pho", lambda v: d["duong_pho"] == v),
         ("phuong_moi", lambda v: d["phuong_moi"] == v),
         ("quan_huyen", lambda v: d["quan_huyen"] == v),
         ("loai_hinh", lambda v: d["loai_hinh"] == v),
         ("loai_hinh_tru", lambda v: ~d["loai_hinh"].isin(v)),
+        ("gia_tu", lambda v: d["TARGET_gia_vnd"] >= v),
+        ("gia_den", lambda v: d["TARGET_gia_vnd"] <= v),
+        ("gia_m2_tu", lambda v: d["gia_tren_m2"] >= v
+         if _co_cot("gia_tren_m2") else None),
+        ("gia_m2_den", lambda v: d["gia_tren_m2"] <= v
+         if _co_cot("gia_tren_m2") else None),
+        ("dt_tu", lambda v: d[cot_dt] >= v),
+        ("dt_den", lambda v: d[cot_dt] <= v),
+        ("so_phong_ngu", lambda v: d["so_phong_ngu"] == v),
+        ("so_phong_vs", lambda v: d["so_phong_vs"] == v),
+        # Tầng lọc theo CẶP: "tầng trung" là 10–20, nới thì nới cả khoảng.
+        # Nới riêng một đầu thì còn lại "tầng ≤ 20" — một điều kiện người
+        # dùng chưa từng nói.
+        ("tang", lambda v: (d[cot_tang].between(v[0] or -np.inf,
+                                                v[1] or np.inf))
+         if _co_cot(cot_tang) else None),
+        ("mt_tu", lambda v: d["mat_tien_m"] >= v if _co_cot("mat_tien_m") else None),
+        ("ngo_tu", lambda v: d["duong_rong_m"] >= v
+         if _co_cot("duong_rong_m") else None),
+        ("kc_den", lambda v: d["kc_trung_tam_km"] <= v
+         if _co_cot("kc_trung_tam_km") else None),
         ("phap_ly", lambda v: d["phap_ly"].isin(v)),
+        ("huong", _loc_huong),
+        ("huong_cua", lambda v: d["huong_cua"].isin(v)
+         if _co_cot("huong_cua") else None),
+        ("huong_ban_cong", lambda v: d["huong_ban_cong"].isin(v)
+         if _co_cot("huong_ban_cong") else None),
+        # Tránh hướng: căn KHÔNG GHI hướng vẫn được giữ — không ghi thì không
+        # biết nó có phải hướng cần tránh hay không, loại đi là đoán bừa.
+        ("huong_tru", lambda v: ~_huong_bat_ky().isin(v) &
+         ~(d["huong_ban_cong"].isin(v) if _co_cot("huong_ban_cong")
+           else pd.Series(False, index=d.index))),
+        ("noi_that", lambda v: d["noi_that"].isin(v)
+         if _co_cot("noi_that") else None),
     ]
 
+    if "tang_tu" in dk or "tang_den" in dk:
+        dk_loc = {**dk, "tang": (dk.get("tang_tu"), dk.get("tang_den"))}
+    else:
+        dk_loc = dk
     mat_na = pd.Series(True, index=d.index)
     bo_qua = []
     for ten, ham in dieu_kien:
-        if ten not in dk:
+        if ten not in dk_loc:
             continue
         try:
-            mk = ham(dk[ten])
+            mk = ham(dk_loc[ten])
         except Exception:
             continue
         if mk is None:              # nhánh này không có cột đó
@@ -987,6 +1530,26 @@ def tim(cau: str, loai: str, dk_them: dict | None = None,
             else:
                 mat_na = m2
 
+    # GHI CHÚ ĐỘ PHỦ: điều kiện nào dựa trên cột ít tin ghi thì nói ra.
+    ghi_chu = []
+    for khoa, cot in _COT_CUA_DK.items():
+        if khoa not in dk or khoa in bo_qua or cot not in d.columns:
+            continue
+        phu = d[cot].notna().mean()
+        if khoa == "huong" and "huong_ban_cong" in d.columns:
+            phu = (d["huong_cua"].notna() | d["huong_ban_cong"].notna()).mean()
+        if phu < _DO_PHU_THAP:
+            ghi_chu.append(f"Chỉ {phu*100:.0f}% tin có ghi {NHAN_DK[khoa]}, "
+                           f"tin không ghi không nằm trong kết quả.")
+    if ("tang_tu" in dk or "tang_den" in dk) and cot_tang in d.columns and \
+            "tang" not in bo_qua:
+        phu = d[cot_tang].notna().mean()
+        if phu < _DO_PHU_THAP:
+            ghi_chu.append(f"Chỉ {phu*100:.0f}% tin có ghi tầng, "
+                           f"tin không ghi không nằm trong kết quả.")
+
+    goi_y_gia = _goi_y_gia(d, dk, bo_qua, cot_dt)
+
     kq = d[mat_na].copy()
     # THỐNG KÊ CỦA CẢ TẬP KHỚP, tính trước khi cắt còn k căn đầu.
     #
@@ -1004,7 +1567,8 @@ def tim(cau: str, loai: str, dk_them: dict | None = None,
         }
     if kq.empty:
         return {"dk": dk, "so_khop": 0, "ket_qua": kq, "bo_qua": bo_qua,
-                "loai": loai, "sap": sap, "thong_ke": thong_ke}
+                "loai": loai, "sap": sap, "thong_ke": thong_ke,
+                "ghi_chu": ghi_chu, "goi_y_gia": goi_y_gia}
 
     if sap == "re_nhat":
         kq = kq.sort_values("TARGET_gia_vnd")
@@ -1028,7 +1592,7 @@ def tim(cau: str, loai: str, dk_them: dict | None = None,
     return {"dk": dk, "so_khop": int(mat_na.sum()),
             "ket_qua": kq.head(k).reset_index(drop=True),
             "bo_qua": bo_qua, "loai": loai, "sap": sap,
-            "thong_ke": thong_ke}
+            "thong_ke": thong_ke, "ghi_chu": ghi_chu, "goi_y_gia": goi_y_gia}
 
 
 NHAN_SAP = {
@@ -1037,6 +1601,33 @@ NHAN_SAP = {
     "lech_thap": "rẻ hơn mặt bằng nhiều nhất trước",
     "lech_cao": "cao hơn mặt bằng nhiều nhất trước",
 }
+
+
+def _chu_huong_noi_that(dk: dict) -> list[tuple[str, str]]:
+    """Chữ hiện cho các điều kiện hướng và nội thất, dùng chung cho thẻ và
+    câu mô tả."""
+    ra = []
+    if dk.get("huong"):
+        tt = dk.get("_tu_trach")
+        if tt and sorted(dk["huong"]) == sorted(
+                next(ds for ten, ds in _TU_TRACH.values() if ten == tt)):
+            ra.append(("huong", f"{tt} ({', '.join(dk['huong'])})"))
+        else:
+            ra.append(("huong", "hướng " + ", ".join(dk["huong"])))
+    if dk.get("huong_cua"):
+        ra.append(("huong_cua", "cửa hướng " + ", ".join(dk["huong_cua"])))
+    if dk.get("huong_ban_cong"):
+        ra.append(("huong_ban_cong",
+                   "ban công hướng " + ", ".join(dk["huong_ban_cong"])))
+    if dk.get("huong_tru"):
+        ra.append(("huong_tru", "tránh hướng " + ", ".join(dk["huong_tru"])))
+    if dk.get("noi_that"):
+        nt = dk["noi_that"]
+        chu = "full nội thất" if set(nt) == {"Nội thất đầy đủ",
+                                             "Nội thất cao cấp"} \
+            else " / ".join(x.lower() for x in nt)
+        ra.append(("noi_that", chu))
+    return ra
 
 
 def mo_ta_dk(dk: dict, loai: str) -> list[str]:
@@ -1052,6 +1643,12 @@ def mo_ta_dk(dk: dict, loai: str) -> list[str]:
         ra.append(f"giá không quá {dk['gia_den']/1e9:.2f} tỷ")
     elif dk.get("gia_tu"):
         ra.append(f"giá từ {dk['gia_tu']/1e9:.2f} tỷ")
+
+    if dk.get("gia_m2_tu") or dk.get("gia_m2_den"):
+        a, b = dk.get("gia_m2_tu"), dk.get("gia_m2_den")
+        ra.append("đơn giá " + (f"{a/1e6:.0f}–{b/1e6:.0f}" if a and b else
+                                f"tới {b/1e6:.0f}" if b else f"từ {a/1e6:.0f}")
+                  + " triệu/m²")
 
     if dk.get("dt_tu") and dk.get("dt_den"):
         ra.append(f"diện tích {dk['dt_tu']:.0f}–{dk['dt_den']:.0f} m²")
@@ -1089,6 +1686,7 @@ def mo_ta_dk(dk: dict, loai: str) -> list[str]:
         ra.append("không lấy " + ", ".join(dk["loai_hinh_tru"]).lower())
     if dk.get("phap_ly"):
         ra.append(" hoặc ".join(dk["phap_ly"]))
+    ra.extend(chu for _, chu in _chu_huong_noi_that(dk))
     for c in dk.get("co", []):
         ra.append(NHAN_CO.get(c, c))
     for c in dk.get("khong", []):
@@ -1146,7 +1744,23 @@ _DAU_HIEU_CAU_TIEP = (_TU_RE_HON + _TU_DAT_HON + _TU_RONG_HON + _TU_HEP_HON
                       + _TU_MO_RONG + _TU_BO_DK
                       + ("them", "va", "con", "nua", "thay vi", "doi sang",
                          "doi qua", "chuyen sang", "ngoai ra", "nhung ma",
-                         "van", "giu nguyen", "cung duoc", "thu xem"))
+                         "van", "giu nguyen", "cung duoc", "thu xem",
+                         # thu hẹp trong tập đang xem
+                         "chi lay", "chi xem", "chi can", "chi tim", "chi con",
+                         "loc", "loc ra", "trong do", "trong so", "trong nay",
+                         "trong may can", "nhung can", "can nao", "cai nao",
+                         "uu tien", "them dieu kien"))
+
+# Câu mở đầu bằng những chữ này là một lần TÌM MỚI, dù có chữ "và" ở giữa.
+_TU_CAU_MOI = ("tim cho toi", "tim giup", "tim ho", "giup toi tim", "toi muon tim",
+               "toi can tim", "toi muon mua", "toi can mua", "minh muon tim",
+               "minh can tim", "minh muon mua", "minh can mua", "em muon tim",
+               "em muon mua", "tim nha", "tim can")
+
+# Có một trong các khoá này thì câu tự đứng được: nó nói ở đâu, bao nhiêu
+# tiền, loại gì. Không có khoá nào thì câu chỉ là thêm chi tiết cho lượt trước.
+_KHOA_PHAM_VI = ("quan_huyen", "phuong_moi", "duong_pho", "du_an", "gia_tu",
+                 "gia_den", "loai_hinh")
 
 
 def la_lam_lai(cau: str) -> bool:
@@ -1157,21 +1771,101 @@ def la_hoan_tac(cau: str) -> bool:
     return _tim_cum(_chuan(cau), _TU_HOAN_TAC) is not None
 
 
-def la_cau_tiep(cau: str, dk_cu: dict | None) -> bool:
+# Chỉ những chữ gọi ĐÍCH DANH loại BĐS. Không dùng cả danh sách của
+# `doan_loai`: ở đó "ban công" là dấu hiệu chung cư, nên câu "thêm ban công
+# hướng Nam" khi đang xem nhà đất sẽ bị coi là chuyển sang chung cư.
+_GOI_TEN_LOAI = {
+    "chungcu": ("chung cu", "can ho", "apartment"),
+    "nhadat": ("nha dat", "nha rieng", "nha pho", "mat pho", "biet thu",
+               "lien ke", "nha ngo", "tho cu", "villa", "shophouse"),
+}
+
+
+def _noi_ro_loai(t: str) -> str | None:
+    co = [l for l, tu in _GOI_TEN_LOAI.items() if _tim_cum(t, tu) is not None]
+    return co[0] if len(co) == 1 else None
+
+
+def la_cau_tiep(cau: str, dk_cu: dict | None, loai: str | None = None) -> bool:
     """Câu này là SỬA điều kiện cũ, hay là một tìm kiếm mới hẳn?
 
-    Chưa có điều kiện cũ thì không thể là câu tiếp. Có rồi thì:
-      - có dấu hiệu sửa đổi  -> câu tiếp
-      - câu rất ngắn (≤ 5 từ) và bóc được ít nhất một điều kiện -> câu tiếp,
-        vì "Thanh Xuân thì sao" hay "3 ngủ" là cách người ta nói tiếp
-      - còn lại -> câu mới
+    Chưa có điều kiện cũ thì không thể là câu tiếp. Có rồi thì xét theo thứ tự:
+      1. mở đầu kiểu "tìm cho tôi…", "tôi muốn mua…"   -> câu mới
+      2. nói sang loại BĐS khác (đang chung cư, gõ "nhà đất…") -> câu mới
+      3. có dấu hiệu sửa đổi ("rẻ hơn", "thêm", "chỉ lấy") -> câu tiếp
+      4. không nêu nơi chốn, giá hay loại hình -> câu tiếp. "Căn có ban công
+         hướng Nam" không tự đứng được — nó là chi tiết thêm cho lượt trước.
+      5. câu rất ngắn (≤ 5 từ) -> câu tiếp ("Thanh Xuân thì sao", "3 ngủ")
+      6. còn lại -> câu mới
+
+    Bản trước thiếu bước 4: câu "Chỉ lấy những căn có ban công hướng Nam
+    thôi" dài 10 từ nên bị coi là câu mới, và mất sạch quận, giá đã nói.
     """
     if not dk_cu:
         return False
     t = _chuan(cau)
+    dau = " ".join(t.split()[:4])
+    if _tim_cum(dau, _TU_CAU_MOI) is not None:
+        return False
+    if loai and _noi_ro_loai(t) not in (None, loai):
+        return False
     if _tim_cum(t, _DAU_HIEU_CAU_TIEP) is not None:
         return True
+    if loai and not set(phan_tich(cau, loai)) & set(_KHOA_PHAM_VI):
+        return True
     return len(t.split()) <= 5
+
+
+# Khi người dùng chuyển loại BĐS ("nhà đất thì sao?"), những thứ này vẫn còn
+# nghĩa ở loại mới nên được mang theo. Dự án, tầng căn hộ, hướng ban công,
+# loại hình nhà đất thì không — chúng chỉ có ở một bên.
+_MANG_SANG = {
+    "noi": ("quan_huyen", "phuong_moi", "_phuong_go_cu", "duong_pho"),
+    "gia": ("gia_tu", "gia_den"),
+    "khac": ("dt_tu", "dt_den", "kc_den", "huong", "huong_cua", "huong_tru",
+             "_tu_trach", "noi_that", "phap_ly"),
+}
+
+
+def mang_sang(dk_cu: dict, dk_moi: dict) -> tuple[dict, list[str]]:
+    """Mang điều kiện của lượt trước sang một lần tìm ở loại BĐS khác.
+
+    "Chung cư Hoàng Mai dưới 3 tỷ" rồi "nhà đất thì sao" — câu sau không nói
+    lại Hoàng Mai hay 3 tỷ, nhưng rõ ràng vẫn là Hoàng Mai, 3 tỷ. Nhóm nào câu
+    mới đã nêu thì câu mới thắng, nhóm nào chưa nêu thì lấy từ lượt trước.
+    """
+    if not dk_cu:
+        return dk_moi, []
+    dk, giu = dict(dk_moi), []
+    for nhom, khoa in _MANG_SANG.items():
+        if any(k in dk_moi for k in khoa):
+            continue
+        co = {k: dk_cu[k] for k in khoa if k in dk_cu}
+        if co:
+            dk.update(co)
+            giu.append({"noi": "khu vực", "gia": "mức giá",
+                        "khac": "các điều kiện khác"}[nhom])
+    doi = [f"giữ {', '.join(giu)} từ lượt trước"] if giu else []
+    return dk, doi
+
+
+def buoc_hoi_thoai(cau: str, dk_hien: dict, loai_hien: str,
+                   thong_ke: dict | None = None) -> dict:
+    """MỘT lượt hội thoại: câu mới -> điều kiện mới. Dùng chung cho giao diện
+    và các bộ kiểm, để thứ được kiểm đúng là thứ người dùng chạy.
+
+    Trả {"dk", "doi", "tiep", "loai"}. Không xử lý "làm lại" / "quay lại" —
+    hai việc đó đụng vào lịch sử hội thoại, là phần của giao diện.
+    """
+    if la_cau_tiep(cau, dk_hien, loai_hien):
+        dk, doi = doc_chinh_sua(cau, dk_hien, thong_ke or {}, loai_hien)
+        return {"dk": dk, "doi": doi, "tiep": True, "loai": loai_hien}
+    loai = doan_loai(cau, loai_hien)
+    dk, doi = phan_tich(cau, loai), []
+    if dk_hien and loai != loai_hien:
+        # Chuyển loại BĐS giữa chừng: giữ khu vực, giá đã nói.
+        dk, doi = mang_sang(dk_hien, dk)
+    return {"dk": dk, "doi": doi, "tiep": False, "loai": loai}
 
 
 def _moc_tuong_doi(thong_ke: dict, khoa: str, mac_dinh: float | None):
@@ -1271,21 +1965,47 @@ def doc_chinh_sua(cau: str, dk_cu: dict, thong_ke: dict, loai: str) -> tuple:
                            ("dt_tu", "diện tích tối thiểu"),
                            ("dt_den", "diện tích tối đa"),
                            ("so_phong_ngu", "số phòng ngủ"),
-                           ("tang_tu", "số tầng"), ("mt_tu", "mặt tiền"),
+                           ("tang_tu", "số tầng"), ("tang_den", "số tầng"),
+                           ("mt_tu", "mặt tiền"),
                            ("ngo_tu", "độ rộng ngõ"),
                            ("phap_ly", "pháp lý"), ("du_an", "dự án"),
-                           ("kc_den", "gần trung tâm")):
+                           ("kc_den", "gần trung tâm"),
+                           ("gia_m2_den", "đơn giá"), ("gia_m2_tu", "đơn giá"),
+                           ("huong", "hướng"), ("huong_cua", "hướng cửa"),
+                           ("huong_ban_cong", "hướng ban công"),
+                           ("huong_tru", "tránh hướng"),
+                           ("noi_that", "nội thất")):
             tu = {"gia_den": ("gia", "tien", "ngan sach", "tran gia"),
                   "gia_tu": ("san gia",),
                   "dt_tu": ("dien tich",), "dt_den": ("dien tich",),
                   "so_phong_ngu": ("phong ngu", "pn", "ngu"),
-                  "tang_tu": ("tang",), "mt_tu": ("mat tien",),
+                  "tang_tu": ("tang",), "tang_den": ("tang",),
+                  "mt_tu": ("mat tien",),
                   "ngo_tu": ("ngo", "duong rong"),
                   "phap_ly": ("phap ly", "so do", "so hong"),
                   "du_an": ("du an",),
-                  "kc_den": ("trung tam",)}[khoa]
+                  "kc_den": ("trung tam",),
+                  "gia_m2_den": ("don gia", "tr m2", "m2"),
+                  "gia_m2_tu": ("don gia", "tr m2", "m2"),
+                  "huong": ("huong", "tu trach"),
+                  "huong_cua": ("huong", "cua"),
+                  "huong_ban_cong": ("ban cong",),
+                  "huong_tru": ("huong",),
+                  "noi_that": ("noi that", "do")}[khoa]
+            if khoa in ("huong", "huong_cua", "huong_tru") and \
+                    _tim_cum(t[vi_bo:], ("ban cong",)) is not None:
+                continue            # "bỏ hướng ban công" chỉ bỏ ban công
+            if khoa in ("gia_den", "gia_tu") and \
+                    _tim_cum(t[vi_bo:], ("don gia",)) is not None:
+                continue            # "bỏ đơn giá" không đụng tới giá căn
             if khoa in dk and _tim_cum(t[vi_bo:], tu) is not None:
                 dk.pop(khoa, None)
+                if khoa == "huong":
+                    dk.pop("_tu_trach", None)
+                if khoa == "tang_tu":
+                    dk.pop("tang_den", None)
+                if khoa == "gia_m2_den":
+                    dk.pop("gia_m2_tu", None)
                 doi.append(f"bỏ điều kiện {nhan}")
         return dk, doi
 
@@ -1305,6 +2025,26 @@ def doc_chinh_sua(cau: str, dk_cu: dict, thong_ke: dict, loai: str) -> tuple:
         doi.append(f"phường: {dk.get('phuong_moi') or 'không giới hạn'} → "
                    f"{them['phuong_moi']}")
         dk.pop("duong_pho", None)
+
+    # Hướng nói lại thì THAY: "hướng Đông thôi" sau "ban công hướng Nam" là
+    # đổi ý, không phải đòi cả hai. Nhưng cửa và ban công là hai thứ khác
+    # nhau, nói lần lượt thì giữ cả hai.
+    # "đổi sang hướng Đông Nam" sau "ban công hướng Nam": người ta đang nói
+    # tiếp về BAN CÔNG, chỉ không nhắc lại chữ đó. Nên hướng chung chung được
+    # gán vào đúng loại hướng đang có, nếu chỉ có một loại.
+    rieng = [k for k in ("huong_cua", "huong_ban_cong") if dk.get(k)]
+    if "huong" in them and len(rieng) == 1 and not dk.get("huong") and \
+            not them.get("_tu_trach"):
+        them[rieng[0]] = them.pop("huong")
+    if "huong" in them:
+        for k in ("huong_cua", "huong_ban_cong", "_tu_trach"):
+            dk.pop(k, None)
+    if "huong_cua" in them or "huong_ban_cong" in them:
+        dk.pop("huong", None)
+        dk.pop("_tu_trach", None)
+    if "tang_tu" in them or "tang_den" in them:
+        dk.pop("tang_tu", None)
+        dk.pop("tang_den", None)
 
     for k, v in them.items():
         if k in ("co", "khong", "loai_hinh_tru"):
@@ -1367,6 +2107,16 @@ def the_dk(dk: dict, loai: str) -> list[tuple[str, str]]:
             chu = f"giá ≥ {dk['gia_tu']/1e9:.2f} tỷ"
         ra.append(("gia", chu.replace(".", ",")))
 
+    if dk.get("gia_m2_tu") or dk.get("gia_m2_den"):
+        a, b = dk.get("gia_m2_tu"), dk.get("gia_m2_den")
+        if a and b:
+            chu = f"{a/1e6:.0f}–{b/1e6:.0f} tr/m²"
+        elif b:
+            chu = f"≤ {b/1e6:.0f} tr/m²"
+        else:
+            chu = f"≥ {a/1e6:.0f} tr/m²"
+        ra.append(("gia_m2", chu))
+
     if dk.get("dt_tu") or dk.get("dt_den"):
         if dk.get("dt_tu") and dk.get("dt_den"):
             chu = f"{dk['dt_tu']:.0f}–{dk['dt_den']:.0f} m²"
@@ -1407,6 +2157,8 @@ def the_dk(dk: dict, loai: str) -> list[tuple[str, str]]:
                    "không lấy " + ", ".join(dk["loai_hinh_tru"]).lower()))
     if dk.get("phap_ly"):
         ra.append(("phap_ly", " / ".join(dk["phap_ly"])))
+    for khoa, chu in _chu_huong_noi_that(dk):
+        ra.append((khoa, chu))
     for c in dk.get("co", []):
         ra.append((f"co:{c}", NHAN_CO.get(c, c)))
     for c in dk.get("khong", []):
@@ -1418,8 +2170,10 @@ def the_dk(dk: dict, loai: str) -> list[tuple[str, str]]:
 # nên xoá thẻ phải xoá đủ bộ — xoá thiếu thì thẻ biến mất mà bộ lọc vẫn còn.
 _GOM_KHOA = {
     "gia": ("gia_tu", "gia_den"),
+    "gia_m2": ("gia_m2_tu", "gia_m2_den"),
     "dt": ("dt_tu", "dt_den"),
     "tang": ("tang_tu", "tang_den"),
+    "huong": ("huong", "_tu_trach"),
     "phuong_moi": ("phuong_moi", "_phuong_go_cu"),
     "quan_huyen": ("quan_huyen", "phuong_moi", "_phuong_go_cu", "duong_pho"),
 }

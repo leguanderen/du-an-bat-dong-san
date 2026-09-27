@@ -52,6 +52,10 @@ _scratch/*
 # thu_app.py là bộ streamlit giả mà MỌI bộ kiểm giao diện gọi tới.
 # Giữ kiem_*.py mà bỏ nó thì cả bảy bộ kiểm không chạy được.
 !_scratch/thu_app.py
+# Đo độ chính xác bộ đọc câu trên tin rao thật + bảng kết quả test case:
+# cả hai là số liệu dẫn trong khoá luận, phải nằm trong repo.
+!_scratch/do_chinh_xac_bo_doc.py
+!_scratch/ket_qua_test_case.md
 
 # File tạm của pipeline
 data_clean/_tam_gop/

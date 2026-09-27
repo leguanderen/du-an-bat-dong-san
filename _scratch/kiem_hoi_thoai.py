@@ -103,11 +103,8 @@ def chay() -> int:
         print(f"\n=== {nhan} [{loai}] ===")
         dk, tk = {}, {}
         for cau, can, khong_duoc, can_con in luot:
-            tiep = tnh.la_cau_tiep(cau, dk)
-            if tiep:
-                dk, doi = tnh.doc_chinh_sua(cau, dk, tk, loai)
-            else:
-                dk, doi = tnh.phan_tich(cau, loai), []
+            b = tnh.buoc_hoi_thoai(cau, dk, loai, tk)
+            dk, doi, tiep, loai = b["dk"], b["doi"], b["tiep"], b["loai"]
             kq = tnh.tim("", loai, dk_them=dk, k=5)
             tk = kq.get("thong_ke", {})
 
