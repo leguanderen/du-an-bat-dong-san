@@ -3,12 +3,11 @@ app.py — Giao diện Streamlit của hệ thống định giá bất động s
 
 BẢN NÀY THAY GÌ SO VỚI BẢN CŨ
 -----------------------------
-Giao diện giữ nguyên: vẫn Bento grid nền charcoal, vẫn cùng bố cục, cùng các ô
-nhập. Thay phần RUỘT:
-
-  * Không nạp `model_*.pkl` nữa. Mọi thứ đi qua `pipeline/valuation_service.py`,
-    module này tự huấn luyện lúc khởi động từ dữ liệu sạch. Nhờ vậy không còn
-    cảnh file .pkl và file .xlsx lệch pha nhau.
+  * Không nạp `model_*.pkl` nữa. Mọi thứ đi qua `pipeline/valuation_service.py`.
+    Model được `chuan_bi_trien_khai.py` huấn luyện sẵn và ghi ra `_trien_khai/`,
+    mang theo vân tay của đúng bộ dữ liệu sinh ra nó; lúc nạp vân tay được đem
+    so, lệch là huấn luyện lại tại chỗ. Nhờ vậy không còn cảnh file model và
+    file dữ liệu lệch pha nhau mà không ai biết.
   * "Khoảng tham khảo ±15%" bị bỏ. Đo lại thì khoảng đó chỉ đúng 58,5% với
     chung cư và 45,6% với nhà đất — tức sai hơn một nửa số lần. Thay bằng
     khoảng CQR có bảo chứng thống kê: rộng hơn nhiều, nhưng đúng 90% số lần.
@@ -357,10 +356,21 @@ def inject_css() -> None:
             border: 1px solid var(--border) !important; border-radius: var(--radius) !important;
             padding: 1.3rem 1.45rem !important;
             box-shadow: 0 1px 2px rgba(23,24,28,0.04), 0 4px 14px rgba(23,24,28,0.045) !important;
-            transition: box-shadow var(--t);
+            transition: border-color var(--t);
         }}
+        /* BỎ HIỆU ỨNG ĐỔ BÓNG KHI RÊ CHUỘT.
+           Người dùng báo cuộn trang bị giật. Tôi đo lại khá nhiều thứ và
+           không tái hiện được (script không chạy lại, trang không nảy, DOM
+           chỉ 308 nút), nên KHÔNG chắc đây là nguyên nhân. Nhưng luật cũ ở
+           đây có một cái giá thật: mỗi khối thẻ đổi bóng khi con trỏ đi qua,
+           kèm `transition`, nên cuộn chuột ngang qua chồng thẻ là một chuỗi
+           vẽ lại bóng mờ 22px liên tiếp — một nguồn giật cuộn quen thuộc
+           trên máy yếu GPU.
+           Đổi lại chỉ mất một hiệu ứng trang trí gần như không ai để ý, nên
+           kể cả không phải nguyên nhân thì bỏ vẫn đúng. Giữ `transition`
+           riêng cho `border-color`, thứ không tốn gì để vẽ. */
         [data-testid="stVerticalBlockBorderWrapper"]:hover {{
-            box-shadow: 0 2px 4px rgba(23,24,28,0.05), 0 8px 22px rgba(23,24,28,0.07) !important;
+            border-color: var(--border-manh) !important;
         }}
 
         /* Ô nhập: nền TRẮNG viền rõ. Nền xám lõm kiểu bản tối làm ô nhập trên
@@ -708,8 +718,12 @@ def _thanh_yeu_to(yeu_to: list[dict], gia_co_so: float | None = None,
             f'</div>')
 
     st.markdown("".join(hang), unsafe_allow_html=True)
-    st.caption("Cột bên phải cộng lại đúng bằng giá ước tính. "
-               "Thanh sang phải là làm tăng giá, sang trái là làm giảm.")
+    # Bỏ câu "thanh sang phải là tăng, sang trái là giảm" — dấu +/− ngay trong
+    # con số đã nói điều đó rồi, viết lại là thừa. Giữ câu cộng-khớp (đó là
+    # thứ mời người đọc tự kiểm) và thêm một mệnh đề cảnh báo nhân quả, vì nó
+    # quan trọng mà đang nằm ở tận khối "Đọc kết quả" phía dưới.
+    st.caption("Cộng cột bên phải ra đúng giá ước tính. Đây là cách máy lần ra "
+               "con số, không phải gợi ý nên sửa gì để bán đắt hơn.")
 
 
 # =============================================================================
@@ -855,13 +869,14 @@ def _bang_comparables(cmp_df: pd.DataFrame, cot_dt: str,
         st.dataframe(hien, hide_index=True, width='stretch')
 
     if "Địa chỉ" in hien.columns:
+        # Bản cũ mở đầu bằng "Cột Địa chỉ cho biết hệ thống xác định được vị
+        # trí tới mức nào" — một câu mô tả cái bảng, trong khi người đọc đang
+        # nhìn thẳng vào cái bảng đó. Vào luôn nghĩa của cái nhãn khó hiểu.
         st.caption(
-            "Cột **Địa chỉ** cho biết hệ thống xác định được vị trí căn đó tới "
-            "mức nào. **“chỉ biết phường”** nghĩa là không tìm được con đường "
-            "người đăng ghi ở trong phường đó — tên đường vẫn hiện (đánh dấu "
-            "**(?)**) vì đó là nguyên văn tin rao, nhưng chưa kiểm được, và ghim "
-            "của căn đó đặt ở giữa phường. Người đăng ghi sai địa chỉ là chuyện "
-            "thường; hệ thống chép lại chứ không sửa hộ.")
+            "**“chỉ biết phường”** = không tìm thấy con đường người bán ghi. "
+            "Tên đường vẫn hiện kèm **(?)**, còn ghim thì đặt giữa phường. "
+            "Tin rao ghi sai địa chỉ là chuyện thường, hệ thống chép lại chứ "
+            "không sửa hộ.")
 
     with st.expander("Xem nội dung 5 tin này (bản đã lưu)"):
         st.caption(
@@ -1385,15 +1400,22 @@ def render_chungcu() -> None:
         with st.container(border=True):
             section_header(ICON_INFO, "Đọc kết quả thế nào cho đúng", "")
             st.markdown(
-                "- Con số ở giữa là mức giá dễ gặp nhất; **khoảng vàng** mới là "
-                "thứ nên bám vào khi thương lượng.\n"
-                "- Khoảng rộng không có nghĩa hệ thống đoán kém. Hai căn giống hệt "
-                "nhau ngoài đời đã được chào giá chênh nhau khoảng 20% — hệ thống "
-                "chỉ đang nói thật về mức chênh đó.\n"
-                "- **Độ tin cậy thấp** nghĩa là khu vực đó có quá ít căn để đối "
-                "chiếu; hãy xem thêm danh sách những căn tương tự bên dưới.\n"
-                "- Các yếu tố ± cho biết những căn có đặc điểm đó thường đắt hay rẻ "
-                "hơn bao nhiêu — không phải lời hứa sửa xong sẽ bán được thêm."
+                # Bốn gạch đầu dòng xuống còn hai.
+                #
+                # Gạch "độ tin cậy thấp" bỏ hẳn: giờ đã có cảnh báo phường mỏng
+                # hiện NGAY DƯỚI con số giá, kèm số căn thật. Nói lại ở đây là
+                # bắt người đọc đọc hai lần cùng một ý.
+                # Gạch "các yếu tố ±" chuyển xuống ngay dưới bảng thác nước —
+                # cảnh báo mà đứng cách xa thứ nó cảnh báo thì không ai nối
+                # được hai cái với nhau.
+                #
+                # Và sửa một lỗi sót: bản cũ ghi "khoảng vàng", chữ còn lại từ
+                # hệ màu vàng kim đã bỏ. Giao diện giờ không có gì màu vàng,
+                # nên người đọc tìm mãi không thấy.
+                "- Đừng bám vào con số ở giữa. Khoảng giá mới là thứ mang ra "
+                "thương lượng.\n"
+                "- Khoảng rộng không phải vì máy đoán dở. Hai căn giống hệt "
+                "nhau ngoài đời cũng đã chào chênh nhau cỡ 20%."
             )
 
 
@@ -1543,11 +1565,11 @@ def render_nhadat() -> None:
         with st.container(border=True):
             section_header(ICON_INFO, "Đọc kết quả thế nào cho đúng", "")
             st.markdown(
-                "- Nhà đất khó đoán hơn chung cư nhiều: hai căn cùng phường, cùng "
-                "diện tích vẫn chênh nhau vì hình thửa, ngõ và hướng — nên khoảng "
-                "tin cậy rộng hơn.\n"
-                "- **Pháp lý** và **ô tô vào nhà** là hai yếu tố tác động mạnh nhất.\n"
-                "- Điền càng đầy đủ, ước lượng càng sát; bỏ trống vẫn dự đoán được."
+                "- Nhà đất khó đoán hơn chung cư: cùng phường, cùng diện tích "
+                "vẫn chênh nhau vì hình thửa, ngõ, hướng. Nên khoảng giá ở đây "
+                "rộng hơn.\n"
+                "- **Pháp lý** và **ô tô vào nhà** là hai thứ ăn giá nhất.\n"
+                "- Bỏ trống vẫn ra kết quả, nhưng điền đủ thì sát hơn."
             )
 
 

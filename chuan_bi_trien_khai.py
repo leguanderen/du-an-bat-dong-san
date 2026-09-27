@@ -53,6 +53,7 @@ for _d in (BASE_DIR / "pipeline", BASE_DIR):
 import numpy as np                        # noqa: E402
 import pandas as pd                       # noqa: E402
 
+import tinh_nang as tn                    # noqa: E402
 import valuation_service as vs            # noqa: E402
 from intervals import ConformalValuer     # noqa: E402
 
@@ -134,6 +135,34 @@ def chuan_bi(loai: str) -> dict:
     print(f"  đọc + dọn + láng giềng   {time.time() - t0:5.1f} s  "
           f"({len(df):,} dòng × {df.shape[1]} cột, nền {len(nen):,})"
           .replace(",", "."))
+
+    # KHOẢNG NGOÀI MẪU TÍNH Ở ĐÂY, KHÔNG TÍNH LÚC NGƯỜI DÙNG GÕ CÂU.
+    #
+    # Đây là 5 fold × 4 model = 20 model XGBoost. Trước đây nó chạy lười, vào
+    # đúng lúc người dùng gõ câu đầu tiên vào chatbot — và vì Streamlit Cloud
+    # cho app ngủ, gần như ai mở link cũng phải chịu. Hậu quả có thật:
+    # "Your app has been throttled", CPU bị bóp, mọi thao tác giật.
+    t = time.time()
+    df = tn.tinh_ngoai_mau(df, cfg)
+    print(f"  khoảng ngoài mẫu        {time.time() - t:5.1f} s  "
+          f"({len(tn.COT_NGOAI_MAU)} cột)")
+
+    # CHỐT CHẶN CHỐNG RÒ RỈ — phần nguy hiểm nhất của cả thay đổi này.
+    #
+    # `gia_du_doan` là GIÁ MÔ HÌNH ĐOÁN cho chính căn đó. Nếu cột ấy lọt vào
+    # danh sách đặc trưng thì model học được cách đoán giá từ... giá đã đoán,
+    # MAPE tụt xuống gần 0 và mọi con số trong khoá luận thành vô nghĩa. Cấu
+    # hình hiện tại không nhặt nó (danh sách cột là tường minh, phần tự dò chỉ
+    # bắt tiền tố "dd_"/"nhac_"), nhưng "hiện tại không" không phải bảo đảm —
+    # thêm một tiền tố tự dò nào đó sau này là lọt ngay, mà lọt thì không có
+    # gì báo, chỉ có kết quả đẹp bất thường.
+    cfg = vs._cau_hinh(loai, df)
+    ro_ri = [c for c in tn.COT_NGOAI_MAU
+             if c in set(cfg.cot_so) | set(cfg.cot_muc)]
+    if ro_ri:
+        raise RuntimeError(
+            f"{loai}: RÒ RỈ — {ro_ri} lọt vào danh sách đặc trưng. "
+            f"Model sẽ học giá từ chính giá nó đoán. Dừng ở đây.")
 
     goi = vs.THU_MUC_GOI / loai
     if goi.exists():

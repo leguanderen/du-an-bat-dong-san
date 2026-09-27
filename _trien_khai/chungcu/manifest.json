@@ -72,6 +72,6 @@
   "Q": 0.07405505938542234,
   "n_train": 3851,
   "n_cal": 1284,
-  "van_tay": "bb44c620f4d945f1-95e40e2ed93ec85c",
+  "van_tay": "f0a38bfa235c4546-95e40e2ed93ec85c",
   "xgboost": "3.2.0"
 }

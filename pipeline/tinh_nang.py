@@ -42,21 +42,53 @@ from train_eval import RANDOM_STATE
 # 1. SĂN TIN HỜI / CẢNH BÁO TIN HỚ
 # =============================================================================
 
+# Năm cột mà `tinh_ngoai_mau` sinh ra. Gom thành hằng số vì có ba chỗ cần
+# biết đúng danh sách này: lúc tính, lúc kiểm xem đã có sẵn chưa, và lúc kiểm
+# rằng chúng KHÔNG lọt vào danh sách đặc trưng.
+COT_NGOAI_MAU = ("gia_du_doan", "khoang_duoi", "khoang_tren",
+                 "lech_phan_tram", "vi_the")
+
+
 @lru_cache(maxsize=4)
 def _khoang_ngoai_mau(loai: str, n_fold: int = 5) -> pd.DataFrame:
-    """Khoảng tin cậy NGOÀI MẪU cho từng tin trong dữ liệu.
+    """Khoảng tin cậy ngoài mẫu — ĐỌC SẴN từ gói nếu có, không thì tính.
 
-    Đây là chỗ dễ làm sai nhất của tính năng này. Nếu huấn luyện trên toàn bộ
-    dữ liệu rồi đi chấm chính những tin đó, mô hình đã NHÌN THẤY giá của chúng
-    lúc học — nó sẽ dự đoán sát, khoảng tin cậy ôm lấy giá rao, và gần như
-    không tin nào bị coi là bất thường. Tính năng sẽ im lặng vô dụng.
+    VÌ SAO PHẢI CHUYỂN SANG TÍNH TRƯỚC
+    ----------------------------------
+    Hàm này huấn luyện 5 fold × 4 model = 20 model XGBoost. Trên máy phát
+    triển mất 15,7 giây (chung cư) và hơn 40 giây (nhà đất). Nó có nhớ đệm
+    nên mỗi tiến trình chỉ chạy một lần — nghe thì chấp nhận được.
 
-    Nên phải chia fold: mỗi tin được chấm bởi một mô hình CHƯA từng thấy nó.
-    Tốn 5 lần huấn luyện (khoảng 30 giây), nhưng đó là điều kiện để con số có
-    nghĩa.
+    Nhưng nó chạy vào ĐÚNG lúc tệ nhất: người dùng gõ câu đầu tiên vào
+    chatbot. Và trên Streamlit Cloud, app ngủ sau một lúc không ai vào, nên
+    hầu như ai mở link cũng phải chịu lần tính đó, trên phần cứng yếu hơn máy
+    này nhiều. Kết quả thật: Streamlit Cloud BÓP CPU của app ("Your app has
+    been throttled"), và từ đó mọi thao tác đều giật.
+
+    Nên phép tính này chuyển sang `chuan_bi_trien_khai.py`, kết quả ghi thẳng
+    vào .parquet. Lúc chạy thật chỉ còn đọc cột.
+
+    VÀ VẪN PHẢI LÀ NGOÀI MẪU. Đây là chỗ dễ làm sai nhất của tính năng này.
+    Nếu huấn luyện trên toàn bộ dữ liệu rồi đi chấm chính những tin đó, mô
+    hình đã NHÌN THẤY giá của chúng lúc học — nó sẽ dự đoán sát, khoảng tin
+    cậy ôm lấy giá rao, và gần như không tin nào bị coi là bất thường. Tính
+    năng sẽ im lặng vô dụng. Chuyển sang tính trước KHÔNG đổi điều đó: vẫn
+    chia fold y hệt, chỉ khác là tính lúc nào.
     """
     d = vs.nap(loai)
-    df, cfg = d["df"].reset_index(drop=True), d["cfg"]
+    df = d["df"]
+    if all(c in df.columns for c in COT_NGOAI_MAU):
+        return df
+    return tinh_ngoai_mau(df, d["cfg"], n_fold)
+
+
+def tinh_ngoai_mau(df: pd.DataFrame, cfg, n_fold: int = 5) -> pd.DataFrame:
+    """Tính khoảng ngoài mẫu cho một bảng — dùng cả lúc dựng gói lẫn lúc chạy.
+
+    Nhận `df` và `cfg` thẳng chứ không tự gọi `vs.nap`: lúc dựng gói thì gói
+    chưa tồn tại, gọi `vs.nap` ở đó là vòng tròn.
+    """
+    df = df.reset_index(drop=True)
 
     lo = np.full(len(df), np.nan)
     hi = np.full(len(df), np.nan)

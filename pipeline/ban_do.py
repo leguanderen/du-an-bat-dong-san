@@ -36,6 +36,7 @@ CÁCH CHẠY
 from __future__ import annotations
 
 import argparse
+from functools import lru_cache
 import json
 from pathlib import Path
 
@@ -86,30 +87,31 @@ _KM_MOI_DO_VI = 111.32
 _HE_SO_KINH = float(np.cos(np.radians(21.0)))
 
 
-def nap(loai: str) -> pd.DataFrame:
-    """Bảng tin đã gán toạ độ, dùng cho mọi phần bản đồ.
+@lru_cache(maxsize=4)
+def _nap_dia(loai: str) -> pd.DataFrame:
+    """Bản gốc trong bộ nhớ đệm. ĐỪNG sửa gì trên kết quả của hàm này.
 
-    ƯU TIÊN PARQUET TRONG GÓI TRIỂN KHAI.
-    Hàm này chạy lúc NGƯỜI DÙNG MỞ TAB KHU VỰC, không phải lúc dựng dữ liệu —
-    và đọc .xlsx mất 1,6 s (chung cư) / 5,4 s (nhà đất). Sau khi
-    `chuan_bi_trien_khai.py` đã rút khởi động chính từ 16,6 s xuống 0,35 s thì
-    đây lại thành chỗ chậm nhất còn lại, nên nó phải đọc cùng một file parquet.
+    ƯU TIÊN PARQUET TRONG GÓI TRIỂN KHAI, không đọc .xlsx.
+    Đọc .xlsx mất 1,6 s (chung cư) / 5,4 s (nhà đất), mà hàm này chạy lúc
+    người dùng mở tab Khu vực chứ không phải lúc dựng dữ liệu.
 
-    Đọc chung một file còn được thêm một thứ quan trọng hơn tốc độ: bản đồ và
-    phần định giá nhìn ĐÚNG MỘT bộ dữ liệu. Trước đây hai bên đọc hai file
-    khác nhau, và chỉ cần chạy lại pipeline mà quên một bước là bản đồ hiển
-    thị một tập tin còn giá lại tính trên tập khác.
+    Đọc chung một file với phần định giá còn được thêm một thứ quan trọng hơn
+    tốc độ: bản đồ và phần định giá nhìn ĐÚNG MỘT bộ dữ liệu. Trước đây hai
+    bên đọc hai file khác nhau, và chỉ cần chạy lại pipeline mà quên một bước
+    là bản đồ hiển thị một tập tin còn giá lại tính trên tập khác.
 
-    Không có gói thì quay về .xlsx như cũ — đường chậm vẫn chạy đúng.
+    Không có gói thì quay về .xlsx — đường chậm vẫn chạy đúng.
     """
     pq = thu_muc_ra("_trien_khai") / loai / "du_lieu.parquet"
     if pq.exists():
         try:
-            d = pd.read_parquet(pq)
+            return _hoan_thien(pd.read_parquet(pq), loai)
         except Exception:                            # noqa: BLE001
-            d = pd.read_excel(DATA_CLEAN / TEP[loai])
-    else:
-        d = pd.read_excel(DATA_CLEAN / TEP[loai])
+            pass
+    return _hoan_thien(pd.read_excel(DATA_CLEAN / TEP[loai]), loai)
+
+
+def _hoan_thien(d: pd.DataFrame, loai: str) -> pd.DataFrame:
     d = d.dropna(subset=["latitude", "longitude"]).copy()
     d["loai"] = loai
     d["dien_tich"] = d[COT_DIEN_TICH[loai]]
@@ -117,6 +119,27 @@ def nap(loai: str) -> pd.DataFrame:
         d["gia_tren_m2"] = d["TARGET_gia_vnd"] / d["dien_tich"]
     d["gia_tren_m2"] = d["gia_tren_m2"].fillna(d["TARGET_gia_vnd"] / d["dien_tich"])
     return d
+
+
+def nap(loai: str) -> pd.DataFrame:
+    """Bảng tin đã gán toạ độ, dùng cho mọi phần bản đồ.
+
+    CÓ NHỚ ĐỆM, VÀ TRẢ VỀ BẢN SAO.
+    -------------------------------
+    Hàm này chạy lúc NGƯỜI DÙNG thao tác, không phải lúc dựng dữ liệu. Trước
+    đây nó đọc lại .parquet mỗi lần gọi — 146 ms cho nhà đất — và `tim_quanh`
+    gọi nó cho CẢ HAI loại, nên mỗi lần vẽ lại tab Khu vực là gần 0,3 giây chỉ
+    để đọc lại đúng thứ vừa đọc xong. Trên máy chủ bị bóp CPU thì đó là phần
+    đáng kể của cảm giác giật.
+    Đo được: đọc lại 146 ms, còn copy bản đã nhớ chỉ 2 ms — nhanh hơn 70 lần.
+
+    Vì sao vẫn trả BẢN SAO chứ không trả thẳng bản trong đệm: vài chỗ gọi hàm
+    này có gán thêm cột lên kết quả. Trả thẳng thì cột đó dính vào bản trong
+    đệm và lần gọi sau nhận được một bảng đã bị sửa — hỏng ngầm, không có gì
+    báo. 2 ms là cái giá quá rẻ để khỏi phải tin rằng mọi chỗ gọi đều cư xử
+    đúng, hôm nay và cả sau này.
+    """
+    return _nap_dia(loai).copy()
 
 
 # =============================================================================
