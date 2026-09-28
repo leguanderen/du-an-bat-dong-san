@@ -6,23 +6,25 @@ Mã nguồn: https://github.com/leguanderen/du-an-bat-dong-san
 ## Đang ở đâu
 
 Mọi con số trong bảng này sinh ra từ **một lệnh duy nhất**:
-`python _scratch/do_toan_bo.py`. Trước đây mỗi con số đo bằng một lệnh riêng,
+`python _scratch/do_toan_bo.py` (kết quả ghi ở `data_clean/do_toan_bo.json`;
+hai dòng độ phủ lấy từ cột ngoài mẫu trong gói `_trien_khai/`). Đo lại ngày
+28/09, sau khi bỏ toạ độ giữ chỗ. Trước đây mỗi con số đo bằng một lệnh riêng,
 ở một thời điểm riêng, rồi chép tay vào đây — và bảng ngày 01/09 sai gần hết
 dòng vì đúng lý do đó. Đo lại được thì mới kiểm lại được.
 
 | | Chung cư | Nhà đất |
 |---|---|---|
 | Số tin dùng được | **5.135** | **14.365** |
-| MAPE (5-fold, out-of-fold) | **14,89%** ±0,29 | **20,35%** ±0,73 |
-| Sai số **trung vị** | 9,93% | 13,66% |
-| Dự đoán lệch dưới 10% | 50,3% | 38,5% |
-| Dự đoán lệch dưới 20% | 77,5% | 66,5% |
-| R² | 0,864 | 0,878 |
+| MAPE (5-fold, out-of-fold) | **14,94%** ±0,32 | **20,45%** ±0,69 |
+| Sai số **trung vị** | 10,05% | 13,76% |
+| Dự đoán lệch dưới 10% | 49,8% | 38,0% |
+| Dự đoán lệch dưới 20% | 77,7% | 66,5% |
+| R² | 0,873 | 0,880 |
 | Ngưỡng nhiễu không khử được | 12,97% | 18,42% |
-| **Khoảng còn có thể cải thiện** | **1,93 điểm** | **1,94 điểm** |
-| Độ phủ khoảng CQR (out-of-fold) | **89,7%** ở ±35,4% | **90,4%** ở ±42,4% |
-| Độ phủ nếu dùng ±15% cố định | 64,1% | 53,0% |
-| Toạ độ ghim được (sàn tự công bố / mã tin / dự án) | 57,8% | 70,0% |
+| **Khoảng còn có thể cải thiện** | **1,97 điểm** | **2,04 điểm** |
+| Độ phủ khoảng CQR (out-of-fold) | **89,9%** ở ±35,8% | **90,4%** ở ±42,6% |
+| Độ phủ nếu dùng ±15% cố định | 63,7% | 52,9% |
+| Toạ độ ghim được (sàn tự công bố / mã tin / dự án) | 55,6% | 69,0% |
 | Phường (mới) có dữ liệu | 65 / 113 | 83 / 113 |
 | — trong đó đủ 20 căn để tô bản đồ | 48 | 64 |
 | — dưới 30 căn, giao diện cảnh báo nhẹ | 26 | 24 |
@@ -30,11 +32,11 @@ dòng vì đúng lý do đó. Đo lại được thì mới kiểm lại đượ
 
 **Đọc bảng này cho đúng.** Ba chỗ dễ bị hiểu sai:
 
-- **MAPE trung bình cao hơn sai số trung vị khá nhiều** (20,35% so với 13,66%
+- **MAPE trung bình cao hơn sai số trung vị khá nhiều** (20,45% so với 13,76%
   ở nhà đất). Chênh đó không phải lỗi tính: phân phối sai số lệch phải, một
   nhúm căn sai rất nặng kéo trung bình lên. Nói "một nửa số căn sai dưới
-  13,7%" vừa đúng vừa dễ hình dung hơn nói MAPE.
-- **Khoảng còn cải thiện chỉ còn khoảng 1,9 điểm ở cả hai nhánh.** Nghĩa là
+  13,8%" vừa đúng vừa dễ hình dung hơn nói MAPE.
+- **Khoảng còn cải thiện chỉ còn khoảng 2 điểm ở cả hai nhánh.** Nghĩa là
   model đã gần chạm mức mà chính dữ liệu cho phép; muốn tốt hơn nữa thì phải
   có dữ liệu tốt hơn, không phải model khéo hơn.
 - **Ngưỡng nhiễu phụ thuộc rất mạnh vào định nghĩa nhóm** — xem phần cảnh báo
@@ -62,7 +64,8 @@ tích 96,7%, số tầng 94,7% đúng trong số bóc được. Trước khi s�
 đăng không ghim — mà vẫn mang nhãn "toạ độ chính xác nhất". Trang Khu vực mở
 ra với "214 căn quanh Hồ Gươm", phần lớn ở Đông Anh, Gia Lâm. Nay bỏ điểm đó
 (và 7 ghim bị kéo lệch nhẹ khỏi nó) rồi điền lại theo phường. Ảnh hưởng tới
-độ chính xác gần như không có (MAPE 14,89% → 14,89%, 20,35% → 20,42%): đây là
+độ chính xác gần như không có (MAPE 14,89% → 14,94%, 20,35% → 20,45%,
+cả hai đều nằm trong độ lệch giữa các fold): đây là
 sửa cho ĐÚNG, không phải cho đẹp số. "Toạ độ ghim được" giảm theo
 (57,8% → 55,6%, 70,0% → 69,0%) vì số cũ đã đếm cả điểm giữ chỗ.
 
@@ -435,7 +438,7 @@ MAPE trong khoá luận đều phải đọc là "sai lệch so với giá ngư�
    điểm của nó, vì sao SHAP cộng được bằng tiền chứ không cộng được bằng
    phần trăm, vì sao 70% tin xác định được đúng căn.
 4. Cào thêm nhà đất — vẫn là nhánh còn nhiều đất nhất, nhưng khoảng trống so
-   với ngưỡng nhiễu giờ chỉ còn 1,94 điểm, nên lợi ích đã giảm hẳn so với
+   với ngưỡng nhiễu giờ chỉ còn khoảng 2 điểm, nên lợi ích đã giảm hẳn so với
    hồi tháng 8.
 
 ## Chạy lại toàn bộ
