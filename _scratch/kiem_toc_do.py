@@ -15,7 +15,7 @@ from __future__ import annotations
 import sys as _sys
 from pathlib import Path as _Path
 _GOC = _Path(__file__).resolve().parent.parent
-for _d in (_GOC, _GOC / "pipeline", _GOC / "app_moi", _GOC / "_scratch"):
+for _d in (_GOC, _GOC / "pipeline", _GOC / "_scratch"):
     if _d.is_dir() and str(_d) not in _sys.path:
         _sys.path.insert(0, str(_d))
 # -----------------------------------------------------------------------------

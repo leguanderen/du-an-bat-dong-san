@@ -166,6 +166,15 @@ TEST_CASE = [
          {"tiep": True, "loai": ND}),
     ]),
 
+    ("TC-40", "Nhiều lượt", CC, "Câu mới đủ nơi chốn + giá không kéo chi tiết cũ theo", [
+        ("chung cư Nam Từ Liêm 2PN dưới 5 tỷ full đồ",
+         {"noi_that": ["Nội thất đầy đủ", "Nội thất cao cấp"]}, (), {}),
+        ("biệt thự Hoàn Kiếm 1 tỷ",
+         {"quan_huyen": "Quận Hoàn Kiếm", "loai_hinh": "Nhà biệt thự"},
+         ("noi_that", "so_phong_ngu"), {"tiep": False, "loai": ND,
+                                        "goi_y": True}),
+    ]),
+
     # --------------------------------------------- E. Không dấu, viết tắt
     ("TC-31", "Không dấu", CC, "Gõ không dấu", [
         ("can ho 3 phong ngu ha dong duoi 3 ty huong dong nam",

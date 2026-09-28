@@ -404,6 +404,13 @@ def gan(df: pd.DataFrame, api: pd.DataFrame,
         # liệu mình không có. Bỏ toạ độ đi thì bậc dưới của thang (theo đường,
         # theo phường) tự điền lại — đúng như mọi tin không khai toạ độ.
         lac = out["latitude"].notna() & out["longitude"].notna() & ngoai_khung(out)
+        # Điểm giữ chỗ giữa Hồ Hoàn Kiếm: sàn tự điền khi người đăng không
+        # ghim bản đồ. Không ai ở giữa mặt hồ — bỏ như toạ độ lạc khung.
+        giu_cho = (haversine_km(out["latitude"], out["longitude"],
+                                21.02895, 105.85245) < 0.03).fillna(False)
+        if giu_cho.any():
+            print(f"  bỏ {int(giu_cho.sum())} toạ độ giữ chỗ giữa Hồ Hoàn Kiếm")
+            out.loc[giu_cho, ["latitude", "longitude"]] = np.nan
         if lac.any():
             print(f"  bỏ {int(lac.sum())} toạ độ nguồn cung cấp nhưng rơi ngoài "
                   f"Hà Nội (để bậc dưới điền lại, KHÔNG đoán sửa chữ số)")

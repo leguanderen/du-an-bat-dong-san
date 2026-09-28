@@ -133,8 +133,8 @@ def chuan_bi(loai: str) -> dict:
 
     df, nen, cfg, canh_bao = vs._nap_tu_xlsx(loai)
     print(f"  đọc + dọn + láng giềng   {time.time() - t0:5.1f} s  "
-          f"({len(df):,} dòng × {df.shape[1]} cột, nền {len(nen):,})"
-          .replace(",", "."))
+          f"({len(df):_} dòng × {df.shape[1]} cột, nền {len(nen):_})"
+          .replace("_", "."))
 
     # KHOẢNG NGOÀI MẪU TÍNH Ở ĐÂY, KHÔNG TÍNH LÚC NGƯỜI DÙNG GÕ CÂU.
     #

@@ -1,4 +1,4 @@
-# Trạng thái dự án — cập nhật 22/09/2026
+# Trạng thái dự án — cập nhật 28/09/2026
 
 **Bản chạy thật: https://dinh-gia-bds-ha-noi.streamlit.app**
 Mã nguồn: https://github.com/leguanderen/du-an-bat-dong-san
@@ -41,6 +41,35 @@ dòng vì đúng lý do đó. Đo lại được thì mới kiểm lại đượ
   ở `_scratch/do_toan_bo.py`: cùng bộ dữ liệu, các định nghĩa hợp lý cho ra
   từ 13,47% tới 19,97%. Trích con số này mà không kèm định nghĩa là vô nghĩa.
 
+
+## Đợt 26–28/09 — chatbot đủ điều kiện, toạ độ giữ chỗ, rà soát trước khi đóng băng
+
+**Chatbot Tìm nhà.** Thêm hướng cửa / ban công / tránh hướng / Đông–Tây tứ
+trạch, tầng thấp–trung–cao, nội thất, đơn giá (triệu/m²). Câu thu hẹp dài
+("Chỉ lấy những căn có ban công hướng Nam thôi") không còn làm mất ngữ cảnh.
+Khi phải nới điều kiện, giữ nơi chốn trước, bỏ chi tiết trước. Giá phi thực
+tế ("biệt thự Hoàn Kiếm 1 tỷ") thì nói thẳng giá thật ở đó. Không tự tính
+hướng hợp tuổi từ năm sinh — cần năm âm lịch và giới tính, sai là ra nhóm
+ngược lại.
+
+**Đo bộ đọc câu trên 5.000 tiêu đề tin rao thật** (`_scratch/do_chinh_xac_bo_doc.py`,
+đo lại trên 3.000 tiêu đề KHÁC mẫu dùng để sửa): quận 96,7%, giá 96,2%, diện
+tích 96,7%, số tầng 94,7% đúng trong số bóc được. Trước khi sửa, giá chỉ 83,6%
+— đọc nhầm "giảm 4 tỷ", "190tr/m2", "dòng tiền 30tr/tháng" thành giá căn.
+
+**Toạ độ giữ chỗ giữa Hồ Hoàn Kiếm.** 249 tin (135 nhà đất, 114 chung cư) ở
+15 quận khác nhau mang đúng một điểm giữa mặt hồ — điểm sàn tự điền khi người
+đăng không ghim — mà vẫn mang nhãn "toạ độ chính xác nhất". Trang Khu vực mở
+ra với "214 căn quanh Hồ Gươm", phần lớn ở Đông Anh, Gia Lâm. Nay bỏ điểm đó
+(và 7 ghim bị kéo lệch nhẹ khỏi nó) rồi điền lại theo phường. Ảnh hưởng tới
+độ chính xác gần như không có (MAPE 14,89% → 14,89%, 20,35% → 20,42%): đây là
+sửa cho ĐÚNG, không phải cho đẹp số. "Toạ độ ghim được" giảm theo
+(57,8% → 55,6%, 70,0% → 69,0%) vì số cũ đã đếm cả điểm giữ chỗ.
+
+**Số hiển thị kiểu Việt.** Thẻ kết quả từng in "7.68 tỷ VND (7,681,3…" — kiểu
+Anh, và bị cắt mất đuôi. Nay "7,68 tỷ", "109,7 triệu/m²". Khoảng tin cậy ghi
+"(−38% / +9%)" thay cho "±23%": khoảng không đối xứng quanh giá dự kiến (điểm
+dự kiến thường nằm ở khoảng 40% bề rộng tính từ đầu dưới), ghi ± là sai.
 
 ## Đợt 18–22/09 — đưa lên mạng, hệ màu sáng, dọn nốt dữ liệu
 
@@ -399,7 +428,7 @@ MAPE trong khoá luận đều phải đọc là "sai lệch so với giá ngư�
    lên nghe như hệ thống không biết gì. Thêm một khoảng hẹp hơn, vẫn có bảo
    chứng thống kê, chỉ là mức đảm bảo thấp hơn — và nói rõ cả hai nghĩa gì.
 2. **Bản đồ giá theo vị trí đã khử đặc điểm nhà** (bản mẫu ở
-   `_scratch/thu_ban_do_vi_tri.py`). Sửa được chuyện Văn Miếu xếp hạng 58/58
+   `pipeline/_scratch/thu_ban_do_vi_tri.py`). Sửa được chuyện Văn Miếu xếp hạng 58/58
    theo giá thô nhưng hạng 40 khi khử diện tích và số tầng.
 3. **Tài liệu trả lời hội đồng.** Hệ thống có rất nhiều số đo nhưng đang nằm
    rải trong comment của code. Gom lại một chỗ: ngưỡng nhiễu và độ nhạy 6,5
@@ -436,6 +465,9 @@ python _scratch/kiem_chat_luot.py
 python _scratch/kiem_nen_ban_do.py       # nền bản đồ + dự phòng
 python _scratch/kiem_thang_mau.py        # thang màu bản đồ
 python _scratch/kiem_phuong_mong.py      # cảnh báo phường mỏng
+python _scratch/kiem_toc_do.py           # khởi động lạnh
+python _scratch/kiem_test_case.py        # 40 test case chatbot -> ket_qua_test_case.md
+python _scratch/do_chinh_xac_bo_doc.py   # độ chính xác bộ đọc câu trên tin rao thật
 
 # 5. Đẩy lên
 git add -A && git commit -m "..." && git push

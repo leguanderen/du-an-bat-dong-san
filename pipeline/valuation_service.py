@@ -29,7 +29,8 @@ import numpy as np
 import pandas as pd
 
 from explain import explain_one, format_vnd, global_importance
-from gan_toa_do import haversine_km, thu_muc, thu_muc_ra
+from gan_toa_do import (HN_BOX, NGUONG_LAC_KM, TIN_TOI_THIEU_DE_XET,
+                        haversine_km, thu_muc, thu_muc_ra)
 from intervals import ConformalValuer, van_tay_cau_hinh
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -236,6 +237,104 @@ def bo_gia_tri_bat_kha_thi(df: pd.DataFrame, loai: str,
             df.loc[xau, cot] = np.nan
 
 
+# ĐIỂM GIỮ CHỖ CỦA NƠI ĐĂNG TIN
+#
+# Người đăng không ghim bản đồ thì sàn điền sẵn một điểm mặc định: giữa Hồ
+# Hoàn Kiếm. 249 tin (135 nhà đất, 114 chung cư) mang đúng điểm đó, rải khắp
+# 15 quận — Đông Anh, Gia Lâm, Hoài Đức... — và vì nhãn là "nguon_goc" nên
+# từng được tin như toạ độ chính xác nhất. Hậu quả: khoảng cách tới trung tâm
+# của một căn ở Đông Anh thành 0,03 km, và trang "Khu vực" mở ra với 214 căn
+# "quanh Hồ Gươm" mà phần lớn ở ngoại thành.
+#
+# Không ai ở giữa mặt hồ, nên điểm này chắc chắn không phải vị trí thật. Xử lý
+# đúng như toạ độ lạc khung: BỎ đi, để bậc dưới (trung vị phường, rồi quận)
+# điền lại — không đoán vị trí nào khác.
+DIEM_GIU_CHO = ((21.02895, 105.85245),)
+BAN_KINH_GIU_CHO_KM = 0.03
+# Sai số p90 của hai bậc điền lại lấy thẳng từ bảng đo trong gan_toa_do.py,
+# không chép số sang đây — chép thì hai nơi sớm muộn lệch nhau.
+from gan_toa_do import SAI_SO_P90_KM as _SAI_SO  # noqa: E402
+_SAI_SO_BAC_DUOI = {k: _SAI_SO[k] for k in ("phuong_moi", "quan")}
+
+
+def bo_toa_do_giu_cho(df: pd.DataFrame, canh_bao: list) -> None:
+    """Thay toạ độ hỏng bằng trung vị phường/quận. Sửa tại chỗ.
+
+    Hai loại hỏng: điểm giữ chỗ giữa hồ, và điểm rơi ra ngoài khung Hà Nội
+    (kinh độ gõ sai một chữ số, 106,85 thay vì 105,85). `gan_toa_do.py` đã bỏ
+    loại thứ hai, nhưng file Excel dựng TRƯỚC bản sửa đó vẫn còn — chặn ở đây
+    thì gói triển khai sạch dù Excel mới hay cũ.
+    """
+    if not {"latitude", "longitude", "nguon_toa_do"} <= set(df.columns):
+        return
+    giu = pd.Series(False, index=df.index)
+    for la, lo in DIEM_GIU_CHO:
+        giu |= (haversine_km(df["latitude"], df["longitude"], la, lo)
+                < BAN_KINH_GIU_CHO_KM).fillna(False)
+    n_giu = int(giu.sum())
+    lo_v, hi_v, lo_k, hi_k = HN_BOX
+    lac = df["latitude"].notna() & ~(df["latitude"].between(lo_v, hi_v)
+                                     & df["longitude"].between(lo_k, hi_k))
+    giu |= lac
+
+    # Ghim mặc định BỊ KÉO NHẸ. Người đăng xê dịch cái ghim giữ chỗ một chút
+    # thì nó không còn trùng điểm, nhưng vẫn quanh hồ: tin ở Tây Tựu (cách hồ
+    # 14 km) nằm ở 0,65 km. Chỉ xét những ghim trong 1,5 km quanh điểm giữ chỗ
+    # — đúng dấu vết của cơ chế này — và coi là sai khi chúng cách trung vị
+    # phường của chính mình quá 5 km (cùng ngưỡng gan_toa_do.py dùng).
+    #
+    # CỐ Ý KHÔNG áp luật 5 km cho mọi tin: thử rồi, nó bắt thêm ~130 tin nhà
+    # đất, lẫn cả tin ở xã ngoại thành rộng sau sáp nhập mà vị trí có thể
+    # đúng. Không kiểm chứng được từng tin thì không xoá.
+    xet = ["quan_huyen", "phuong_moi"]
+    lech = pd.Series(False, index=df.index)
+    if set(xet) <= set(df.columns):
+        con_lai = df["latitude"].where(~giu)
+        tam = (df.assign(latitude=con_lai)
+                 .groupby(xet)[["latitude", "longitude"]].transform("median"))
+        dem = df.assign(latitude=con_lai).groupby(xet)["latitude"] \
+                .transform("count")
+        cach = haversine_km(con_lai, df["longitude"], tam["latitude"],
+                            tam["longitude"])
+        gan_ho = pd.Series(False, index=df.index)
+        for la, lo in DIEM_GIU_CHO:
+            gan_ho |= (haversine_km(df["latitude"], df["longitude"], la, lo)
+                       < 1.5).fillna(False)
+        lech = ((cach > NGUONG_LAC_KM) & (dem >= TIN_TOI_THIEU_DE_XET)
+                & gan_ho & (df["nguon_toa_do"] == "nguon_goc")).fillna(False)
+    giu |= lech
+    if not giu.any():
+        return
+    df.loc[giu, ["latitude", "longitude"]] = np.nan
+    tot = df[~giu & df["latitude"].notna()]
+    for nhan, khoa in (("phuong_moi", ["quan_huyen", "phuong_moi"]),
+                       ("quan", ["quan_huyen"])):
+        con = giu & df["latitude"].isna()
+        if not con.any() or not set(khoa) <= set(df.columns):
+            continue
+        bang = tot.dropna(subset=khoa).groupby(khoa)[["latitude", "longitude"]]
+        tra = df.loc[con, khoa].join(bang.median(), on=khoa)
+        co = tra["latitude"].notna()
+        idx = tra.index[co]
+        df.loc[idx, ["latitude", "longitude"]] = tra.loc[co, ["latitude",
+                                                              "longitude"]].values
+        df.loc[idx, "nguon_toa_do"] = nhan
+        if "sai_so_p90_km" in df.columns:
+            df.loc[idx, "sai_so_p90_km"] = _SAI_SO_BAC_DUOI[nhan]
+        if "so_tin_tham_chieu" in df.columns:
+            df.loc[idx, "so_tin_tham_chieu"] = np.nan
+    con = giu & df["latitude"].isna()
+    df.loc[con, "nguon_toa_do"] = None
+    if "kc_trung_tam_km" in df.columns:
+        df.loc[giu, "kc_trung_tam_km"] = haversine_km(
+            df.loc[giu, "latitude"], df.loc[giu, "longitude"], *TRUNG_TAM)
+    canh_bao.append(f"toạ độ: {n_giu} tin mang điểm giữ chỗ giữa Hồ Hoàn "
+                    f"Kiếm, {int(lac.sum())} tin rơi ngoài khung Hà Nội, "
+                    f"{int(lech.sum())} tin ghim quanh hồ nhưng cách phường "
+                    f"của nó > {NGUONG_LAC_KM:g} km -> điền lại theo phường/quận "
+                    f"({int(con.sum())} tin không điền được)")
+
+
 def don_truong_chon(df: pd.DataFrame, loai: str) -> list[str]:
     """Chuẩn hoá tại chỗ và đặt tên cột ngắn để dùng làm đặc trưng.
 
@@ -395,7 +494,7 @@ def _bam_file(duong_dan) -> str:
 
 # Tăng lên mỗi khi ĐỔI CÁCH LÀM SẠCH dữ liệu (bộ nhãn chuẩn hoá, cách ghép
 # cột, cách suy cột mới). Xem ghi chú trong `van_tay` để biết vì sao cần.
-PHIEN_BAN_DON_DU_LIEU = 2
+PHIEN_BAN_DON_DU_LIEU = 3     # 3: bỏ toạ độ giữ chỗ giữa Hồ Hoàn Kiếm
 
 
 def van_tay(duong_dan_du_lieu, cfg, alpha: float) -> str:
@@ -469,8 +568,10 @@ def _nap_tu_xlsx(loai: str):
             f"Nếu đang chạy trên máy chủ: thư mục {THU_MUC_GOI.name}/ chưa "
             f"được đẩy lên, hoặc bị .gitignore loại mất.")
     df = pd.read_excel(DATA_DIR / ten)
+    canh_bao: list = []
+    bo_toa_do_giu_cho(df, canh_bao)      # TRƯỚC khi tính khoảng cách
     lam_cot_toa_do(df)
-    canh_bao = don_truong_chon(df, loai)
+    canh_bao += don_truong_chon(df, loai)
     bo_gia_tri_bat_kha_thi(df, loai, canh_bao)
     # In ra TERMINAL, không đưa lên giao diện: đây là cảnh báo cho người bảo
     # trì pipeline, không phải thông tin người đi mua nhà cần đọc. Nhưng phải

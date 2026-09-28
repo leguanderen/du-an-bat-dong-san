@@ -1,6 +1,6 @@
 # Kết quả test case chatbot Tìm nhà
 
-Chạy lúc 13:37 27/09/2026 · **39/39 test case đạt**, 49/49 lượt đúng.
+Chạy lúc 05:44 28/09/2026 · **40/40 test case đạt**, 51/51 lượt đúng.
 
 | Mã | Nhóm | Câu người dùng | Mong đợi | Hệ thống hiểu | Kết quả |
 |---|---|---|---|---|---|
@@ -44,6 +44,8 @@ Chạy lúc 13:37 27/09/2026 · **39/39 test case đạt**, 49/49 lượt đúng
 | TC-29 | Nhiều lượt | nhà đất thì sao | quan_huyen=Quận Hoàng Mai; gia_den=3 tỷ | giá ≤ 3,00 tỷ, Quận Hoàng Mai (65 căn) | Đạt |
 | TC-30 | Nhiều lượt | nhà đất Long Biên 6 tỷ | quan_huyen=Quận Long Biên | giá ≤ 6,00 tỷ, Quận Long Biên (107 căn) | Đạt |
 | TC-30 | Nhiều lượt | thêm ban công hướng Nam | quan_huyen=Quận Long Biên | giá ≤ 6,00 tỷ, Quận Long Biên, ban công hướng Nam · nới: huong_ban_cong (107 căn) | Đạt |
+| TC-40 | Nhiều lượt | chung cư Nam Từ Liêm 2PN dưới 5 tỷ full đồ | noi_that=Nội thất đầy đủ/Nội thất cao cấp | giá ≤ 5,00 tỷ, 2 phòng ngủ, Quận Nam Từ Liêm, full nội thất (101 căn) | Đạt |
+| TC-40 | Nhiều lượt | biệt thự Hoàn Kiếm 1 tỷ | quan_huyen=Quận Hoàn Kiếm; loai_hinh=Nhà biệt thự | giá ≤ 1,00 tỷ, Quận Hoàn Kiếm, Nhà biệt thự · nới: loai_hinh, gia_den (46 căn) | Đạt |
 | TC-31 | Không dấu | can ho 3 phong ngu ha dong duoi 3 ty huong dong nam | so_phong_ngu=3; quan_huyen=Quận Hà Đông; gia_den=3 tỷ; huong=Đông Nam | giá ≤ 3,00 tỷ, 3 phòng ngủ, Quận Hà Đông, hướng Đông Nam · nới: huong (1 căn) | Đạt |
 | TC-32 | Không dấu | chung cu 2 ty 5 cau giay | gia_den=2.5 tỷ | giá ≤ 2,50 tỷ, Quận Cầu Giấy (41 căn) | Đạt |
 | TC-33 | Biên | biệt thự Hoàn Kiếm giá 1 tỷ | loai_hinh=Nhà biệt thự | giá ≤ 1,00 tỷ, Quận Hoàn Kiếm, Nhà biệt thự · nới: loai_hinh, gia_den (46 căn) | Đạt |

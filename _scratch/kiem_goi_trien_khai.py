@@ -14,7 +14,7 @@ Chạy: python _scratch/kiem_goi_trien_khai.py
 import sys as _sys
 from pathlib import Path as _Path
 _GOC = _Path(__file__).resolve().parent.parent
-for _d in (_GOC, _GOC / "pipeline", _GOC / "app_moi", _GOC / "_scratch"):
+for _d in (_GOC, _GOC / "pipeline", _GOC / "_scratch"):
     if _d.is_dir() and str(_d) not in _sys.path:
         _sys.path.insert(0, str(_d))
 # -----------------------------------------------------------------------------
@@ -122,21 +122,31 @@ with tempfile.TemporaryDirectory() as tmp:
 print("\nD. Đường nhanh và đường chậm phải cho CÙNG một con số")
 # Đây là phép kiểm đắt nhất nhưng cũng đáng nhất: nếu hai đường lệch nhau thì
 # bản trên mạng đang định giá khác bản chạy ở máy, mà không ai nhìn ra.
-df_x, nen_x, cfg_x, _ = vs._nap_tu_xlsx(LOAI)
-v_x = ConformalValuer(list(cfg_x.cot_so), list(cfg_x.cot_muc),
-                      alpha=vs.ALPHA_MAC_DINH).fit(df_x, "TARGET_gia_vnd")
-mau = df_x.head(300)
-a = v_x.predict_interval(mau)
-b = v.predict_interval(mau)
-for cot in ("gia", "khoang_duoi", "khoang_tren"):
-    lech = float(np.nanmax(np.abs(a[cot].to_numpy() - b[cot].to_numpy())
-                           / np.maximum(np.abs(a[cot].to_numpy()), 1.0)))
-    kiem(f"cột {cot} trùng khớp (lệch {lech:.1e})", lech < 1e-6, f"{lech:.2e}")
-kiem("lượng nới conformal Q trùng khớp",
-     abs(float(v.Q) - float(v_x.Q)) < 1e-12, f"{v.Q} vs {v_x.Q}")
-kiem("nền láng giềng chọn giống nhau",
-     len(vs.chon_nen_lang_gieng(df)) == len(nen_x),
-     f"{len(vs.chon_nen_lang_gieng(df))} vs {len(nen_x)}")
+# Cần file Excel gốc trong data_clean/ — chỉ có trên máy phát triển, không
+# đẩy lên GitHub. Thiếu thì BỎ QUA và nói rõ, không tính là lỗi: ở máy chủ
+# không có đường chậm nào để so.
+try:
+    _xlsx = vs._nap_tu_xlsx(LOAI)
+except FileNotFoundError:
+    _xlsx = None
+    print("  – bỏ qua: không có file Excel gốc (bình thường nếu không phải "
+          "máy phát triển)")
+if _xlsx is not None:
+    df_x, nen_x, cfg_x, _ = _xlsx
+    v_x = ConformalValuer(list(cfg_x.cot_so), list(cfg_x.cot_muc),
+                          alpha=vs.ALPHA_MAC_DINH).fit(df_x, "TARGET_gia_vnd")
+    mau = df_x.head(300)
+    a = v_x.predict_interval(mau)
+    b = v.predict_interval(mau)
+    for cot in ("gia", "khoang_duoi", "khoang_tren"):
+        lech = float(np.nanmax(np.abs(a[cot].to_numpy() - b[cot].to_numpy())
+                               / np.maximum(np.abs(a[cot].to_numpy()), 1.0)))
+        kiem(f"cột {cot} trùng khớp (lệch {lech:.1e})", lech < 1e-6, f"{lech:.2e}")
+    kiem("lượng nới conformal Q trùng khớp",
+         abs(float(v.Q) - float(v_x.Q)) < 1e-12, f"{v.Q} vs {v_x.Q}")
+    kiem("nền láng giềng chọn giống nhau",
+         len(vs.chon_nen_lang_gieng(df)) == len(nen_x),
+         f"{len(vs.chon_nen_lang_gieng(df))} vs {len(nen_x)}")
 
 print("\nsố lỗi:", loi)
 sys.exit(1 if loi else 0)

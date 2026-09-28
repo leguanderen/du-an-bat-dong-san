@@ -1837,8 +1837,15 @@ def mang_sang(dk_cu: dict, dk_moi: dict) -> tuple[dict, list[str]]:
     if not dk_cu:
         return dk_moi, []
     dk, giu = dict(dk_moi), []
+    # Câu mới đã tự nêu nơi chốn hoặc giá thì nó là một lần tìm MỚI, chỉ đổi
+    # loại BĐS: mang thêm "full nội thất" hay "hướng Nam" của lần tìm trước
+    # vào "biệt thự Hoàn Kiếm 1 tỷ" là gán cho người ta điều họ không nói.
+    # Các chi tiết đó chỉ đi theo khi câu mới trống trơn ("nhà đất thì sao").
+    tu_dung = any(k in dk_moi for k in _MANG_SANG["noi"] + _MANG_SANG["gia"])
     for nhom, khoa in _MANG_SANG.items():
         if any(k in dk_moi for k in khoa):
+            continue
+        if nhom == "khac" and tu_dung:
             continue
         co = {k: dk_cu[k] for k in khoa if k in dk_cu}
         if co:

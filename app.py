@@ -130,16 +130,28 @@ def nap_phuong(loai: str) -> pd.DataFrame:
 
 
 
+def _kieu_viet(chuoi: str) -> str:
+    """"1,234.56" -> "1.234,56": nghìn ngăn bằng chấm, thập phân bằng phẩy.
+
+    Cả app dùng kiểu Việt ("5,92 tỷ" trong bảng giải thích), riêng ô kết quả
+    lại in kiểu Anh ("7.68 tỷ", "109,734,093") — hai kiểu cạnh nhau trên cùng
+    một thẻ thì người đọc không biết dấu nào là phần nghìn.
+    """
+    return chuoi.replace(",", "\x00").replace(".", ",").replace("\x00", ".")
+
+
 def format_vnd(value: float) -> str:
+    """Giá cả căn. Không in thêm số đồng đầy đủ: "7.681.386.496 đồng" là độ
+    chính xác giả — khoảng tin cậy rộng cả tỷ — và làm tràn ô số lớn."""
     if value >= 1_000_000_000:
-        return f"{value/1_000_000_000:,.2f} tỷ VND ({value:,.0f} VND)"
+        return format_ty(value)
     if value >= 1_000_000:
-        return f"{value/1_000_000:,.0f} triệu VND ({value:,.0f} VND)"
-    return f"{value:,.0f} VND"
+        return _kieu_viet(f"{value/1_000_000:,.0f}") + " triệu"
+    return _kieu_viet(f"{value:,.0f}") + " đồng"
 
 
 def format_ty(value: float) -> str:
-    return f"{value/1e9:,.2f} tỷ"
+    return _kieu_viet(f"{value/1e9:,.2f}") + " tỷ"
 
 
 # =============================================================================
@@ -676,7 +688,7 @@ def _thanh_yeu_to(yeu_to: list[dict], gia_co_so: float | None = None,
             f'Căn trung bình ở Hà Nội</div>'
             f'<div style="width:5.2rem;text-align:right;font-size:.86rem;'
             f'color:{COLOR["text_muted"]};font-variant-numeric:tabular-nums;">'
-            f'{gia_co_so/1e9:.2f} tỷ</div></div>')
+            f'{format_ty(gia_co_so)}</div></div>')
 
     for y in yeu_to:
         v = y.get("dong_gop_vnd") or 0
@@ -714,7 +726,7 @@ def _thanh_yeu_to(yeu_to: list[dict], gia_co_so: float | None = None,
             f'<div style="width:5.2rem;text-align:right;font-size:1.02rem;'
             f'font-family:Newsreader,Georgia,serif;font-weight:600;'
             f'color:{COLOR["text"]};'
-            f'font-variant-numeric:tabular-nums;">{gia_cuoi/1e9:.2f} tỷ</div>'
+            f'font-variant-numeric:tabular-nums;">{format_ty(gia_cuoi)}</div>'
             f'</div>')
 
     st.markdown("".join(hang), unsafe_allow_html=True)
@@ -861,7 +873,8 @@ def _bang_comparables(cmp_df: pd.DataFrame, cot_dt: str,
             cmp_df["url_goc"].astype(str).str.startswith("http"))
         if tuoi is not None:
             u = u.where(tuoi.isna() | (tuoi <= HAN_LINK_CU))
-        hien["Tin gốc"] = u
+        # Ô trống phải là chuỗi rỗng: để NaN/None thì bảng in chữ "None".
+        hien["Tin gốc"] = u.astype(object).where(u.notna(), "")
         st.dataframe(hien, hide_index=True, width='stretch',
                      column_config={"Tin gốc": st.column_config.LinkColumn(
                          "Tin gốc", display_text="mở")})
@@ -1255,14 +1268,16 @@ def render_ket_qua(loai: str, dac_diem: dict, cot_dt: str) -> None:
                font-variant-numeric:tabular-nums;">
             {format_ty(kq['khoang_duoi'])} — {format_ty(kq['khoang_tren'])}
             <span style="color:{COLOR['text_muted']};font-weight:500;font-size:.85rem;">
-              (±{kq['do_rong_phan_tram']:.0f}%)</span>
+              ({(kq['khoang_duoi'] / kq['gia'] - 1) * 100:+.0f}% /
+               {(kq['khoang_tren'] / kq['gia'] - 1) * 100:+.0f}%)</span>
           </div>
         </div>""",
         unsafe_allow_html=True,
     )
     _huy_hieu_tin_cay(kq["do_tin_cay"])
     if dt:
-        st.metric("Giá/m² dự kiến", f"{kq['gia'] / dt:,.0f} VND/m²")
+        st.metric("Giá/m² dự kiến",
+                  _kieu_viet(f"{kq['gia'] / dt / 1e6:,.1f}") + " triệu/m²")
 
     with st.expander("Vì sao lại là con số này?", expanded=True):
         gt = kq.get("giai_thich") or {}
@@ -2373,22 +2388,25 @@ def _khoi_ban_do(loai: str, pdk=None) -> None:
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Số căn quanh đây", _so(len(quanh)))
     m2.metric("Giá mỗi m² thường gặp",
-              f"{quanh['gia_tren_m2'].median()/1e6:,.1f} triệu")
+              _kieu_viet(f"{quanh['gia_tren_m2'].median()/1e6:,.1f}") + " triệu")
     m3.metric("Giá cả căn thường gặp",
               format_ty(quanh["TARGET_gia_vnd"].median()))
     m4.metric("Diện tích thường gặp",
-              f"{quanh['dien_tich'].median():,.0f} m²")
+              _kieu_viet(f"{quanh['dien_tich'].median():,.0f}") + " m²")
     if o and not o["du_tin_cay"]:
         st.caption(f"⚠️ Chỉ {o['so_tin']} căn quanh đây nên các con số trên "
                    f"chưa chắc.")
 
     hien = pd.DataFrame({
-        "Cách": quanh["khoang_cach_km"].round(2).astype(str) + " km",
+        "Cách": quanh["khoang_cach_km"].map(
+            lambda v: _kieu_viet(f"{v:.2f}") + " km"),
         "Giá rao": quanh["TARGET_gia_vnd"].map(format_ty),
-        "Giá/m²": (quanh["gia_tren_m2"] / 1e6).round(1).astype(str) + " tr",
-        "Diện tích": quanh["dien_tich"].astype(str) + " m²",
-        "Phường": quanh["phuong_moi"],
-        "Đường": quanh["duong_pho"],
+        "Giá/m²": (quanh["gia_tren_m2"] / 1e6).map(
+            lambda v: _kieu_viet(f"{v:,.1f}") + " tr"),
+        "Diện tích": quanh["dien_tich"].map(
+            lambda v: _kieu_viet(f"{v:,.0f}") + " m²" if pd.notna(v) else ""),
+        "Phường": quanh["phuong_moi"].fillna(""),
+        "Đường": quanh["duong_pho"].fillna(""),
     })
     # LINK thay cho cột "Nguồn toạ độ". Ẩn link đã quá cũ, vì tin rao bị sàn
     # xoá sau khoảng 30 ngày — dán một link chết vào bảng còn tệ hơn bỏ trống.
@@ -2400,7 +2418,8 @@ def _khoi_ban_do(loai: str, pdk=None) -> None:
                     - pd.to_datetime(quanh["ngay_quan_sat"],
                                      errors="coerce")).dt.days
             u = u.where(tuoi.isna() | (tuoi <= HAN_LINK_CU))
-        hien["Tin gốc"] = u
+        # Ô trống phải là chuỗi rỗng: để NaN/None thì bảng in chữ "None".
+        hien["Tin gốc"] = u.astype(object).where(u.notna(), "")
         st.dataframe(hien.head(200), hide_index=True, width='stretch',
                      column_config={"Tin gốc": st.column_config.LinkColumn(
                          "Tin gốc", display_text="mở")})

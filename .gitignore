@@ -55,6 +55,9 @@ _scratch/*
 # Đo độ chính xác bộ đọc câu trên tin rao thật + bảng kết quả test case:
 # cả hai là số liệu dẫn trong khoá luận, phải nằm trong repo.
 !_scratch/do_chinh_xac_bo_doc.py
+# Nguồn DUY NHẤT của mọi con số trong TRANG_THAI.md và khoá luận. Trước đây
+# nó chỉ nằm trên một máy — mất máy là mất cách chứng minh các con số.
+!_scratch/do_toan_bo.py
 !_scratch/ket_qua_test_case.md
 
 # File tạm của pipeline
@@ -131,3 +134,7 @@ mau/
 Claude outputs/
 _kiem_tra_gitignore.txt
 _scratch/*.html
+
+# Thư mục gom file thừa của don_dep.py — xem xong thì xoá, không đẩy lên.
+_cho_xoa/
+don_dep.py

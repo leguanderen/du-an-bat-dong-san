@@ -1,0 +1,85 @@
+[
+  {
+    "loai": "chungcu",
+    "so_tin": 5135,
+    "toa_do_chinh_xac_pct": 55.559883154819865,
+    "toa_do_theo_muc": {
+      "nguon_goc": 2367,
+      "duong": 1555,
+      "du_an": 486,
+      "phuong": 472,
+      "phuong_moi": 161,
+      "duong_moi": 53,
+      "duong_quan": 26,
+      "quan": 15
+    },
+    "so_phuong_co_du_lieu": 65,
+    "so_phuong_du_20": 48,
+    "so_phuong_duoi_30": 26,
+    "so_phuong_duoi_10": 10,
+    "nhieu": {
+      "nguong_pct": 12.968785522921847,
+      "so_nhom": 761,
+      "so_tin_trong_nhom": 3019
+    },
+    "ktc": {
+      "muc_tieu_pct": 90.0,
+      "do_rong_trung_vi_pct": 33.14957809448242,
+      "Q_conformal": 0.0663831926569074,
+      "n_train": 3851,
+      "n_hieu_chuan": 1284,
+      "do_phu_tren_tap_huan_luyen_pct": 97.29308666017526
+    },
+    "cv": {
+      "MAPE": 14.94095659189768,
+      "MAPE_std": 0.3206949785685955,
+      "R2": 0.8728219765606857,
+      "sai_so_trung_vi_pct": 10.05499297633873,
+      "trong_10_pct": 49.81499513145083,
+      "trong_20_pct": 77.70204479065238
+    },
+    "cach_nguong_nhieu_diem": 1.9721710689758325,
+    "giay": 2.9
+  },
+  {
+    "loai": "nhadat",
+    "so_tin": 14365,
+    "toa_do_chinh_xac_pct": 69.04281239122868,
+    "toa_do_theo_muc": {
+      "nguon_goc": 9678,
+      "duong": 2845,
+      "phuong": 1389,
+      "ma_tin": 240,
+      "phuong_moi": 140,
+      "quan": 67,
+      "duong_quan": 6
+    },
+    "so_phuong_co_du_lieu": 83,
+    "so_phuong_du_20": 64,
+    "so_phuong_duoi_30": 24,
+    "so_phuong_duoi_10": 13,
+    "nhieu": {
+      "nguong_pct": 18.415430469736823,
+      "so_nhom": 1369,
+      "so_tin_trong_nhom": 4560
+    },
+    "ktc": {
+      "muc_tieu_pct": 90.0,
+      "do_rong_trung_vi_pct": 41.35587692260742,
+      "Q_conformal": 0.0728207747919214,
+      "n_train": 10773,
+      "n_hieu_chuan": 3592,
+      "do_phu_tren_tap_huan_luyen_pct": 96.51235642185868
+    },
+    "cv": {
+      "MAPE": 20.45207414562959,
+      "MAPE_std": 0.6946893511560485,
+      "R2": 0.8803477056950839,
+      "sai_so_trung_vi_pct": 13.758197759999998,
+      "trong_10_pct": 38.00208840932823,
+      "trong_20_pct": 66.48103028193526
+    },
+    "cach_nguong_nhieu_diem": 2.036643675892769,
+    "giay": 4.8
+  }
+]

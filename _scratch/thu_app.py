@@ -66,7 +66,7 @@ sys.modules["streamlit.components.v1"] = v1
 from pathlib import Path as _P
 _G = _P(__file__).resolve().parent.parent
 sys.path[:0] = [str(d) for d in
-                (_G / "app_moi", _G, _G / "pipeline") if d.is_dir()]
+                (_G, _G / "pipeline") if d.is_dir()]
 import app
 
 loi = 0

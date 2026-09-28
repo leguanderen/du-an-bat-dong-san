@@ -69,9 +69,9 @@
   "alpha": 0.1,
   "smoothing": 10.0,
   "point_estimator": "q50",
-  "Q": 0.07405505938542234,
+  "Q": 0.0663831926569074,
   "n_train": 3851,
   "n_cal": 1284,
-  "van_tay": "f0a38bfa235c4546-95e40e2ed93ec85c",
+  "van_tay": "cba2c76d100be6bd-697b807d5bd4f0f5",
   "xgboost": "3.2.0"
 }
