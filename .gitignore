@@ -138,3 +138,7 @@ _scratch/*.html
 # Thư mục gom file thừa của don_dep.py — xem xong thì xoá, không đẩy lên.
 _cho_xoa/
 don_dep.py
+
+# Khoá luận (bản nháp, nguồn dựng) — không đưa lên GitHub công khai: trang
+# kiểm tra đạo văn có thể coi bản đã công khai là nguồn bị chép.
+khoa_luan/
