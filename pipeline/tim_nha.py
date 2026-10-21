@@ -92,7 +92,7 @@ def _chuan_so(s: object) -> str:
     trắng nên "3 5 ty" không còn khớp mẫu khoảng nữa — bản đầu đọc nhầm
     "3-5 tỷ" thành "không quá 5 tỷ".
     """
-    t = _bo_dau(s)
+    t = _bo_dau(_dau_so_sanh(s))
     t = re.sub(r"[^a-z0-9\s.,~-]", " ", t)
     return " ".join(t.split())
 
@@ -162,8 +162,54 @@ _DV_TIEN = {
 }
 _DV_TY = ("ty", "tỷ", "ti", "tỉ", "b")
 _TU_DUOI = ("duoi", "toi da", "khong qua", "it hon", "nho hon", "max",
-            "trong tam", "tam gia")
-_TU_TREN = ("tren", "toi thieu", "hon", "lon hon", "tu", "min")
+            "trong tam", "tam gia", "be hon", "re hon", "gia thap hon",
+            "khong vuot qua", "khong hon", "khong toi")
+_TU_TREN = ("tren", "toi thieu", "hon", "lon hon", "tu", "min", "it nhat",
+            "cao hon", "nhieu hon", "dat hon")
+# THỨ TỰ XÉT: _TU_DUOI TRƯỚC _TU_TREN, KHÔNG ĐƯỢC ĐẢO.
+#
+# "nhỏ hơn 3 tỷ" kết thúc bằng chữ "hơn", mà "hơn" (như "hơn 3 tỷ") nằm trong
+# _TU_TREN. Bản trước chỉ xét _TU_TREN, nên "nhỏ hơn / ít hơn / thấp hơn 3 tỷ"
+# đều bị đọc NGƯỢC thành "từ 3 tỷ trở lên" — đúng loại lỗi tệ nhất: người dùng
+# nói rõ mà hệ thống lọc ngược. Xét cụm dài "nhỏ hơn" trước thì "hơn" trần
+# trụi chỉ còn khớp khi đứng một mình.
+
+# Cụm chỉ hướng đứng SAU con số: "5 tỷ trở xuống", "5 tỷ đổ lại", "3 tỷ trở
+# lên". Người Hà Nội nói kiểu này rất nhiều. Cụm sau số được ưu tiên hơn cụm
+# trước số: "từ 3 tỷ trở xuống" nghĩa là KHÔNG QUÁ 3 tỷ.
+_SAU_DUOI = ("tro xuong", "do xuong", "do lai", "tro lai", "tro ve")
+_SAU_TREN = ("tro len", "do len")
+
+
+def _ke_ngay_sau(sau: str, tu: tuple) -> bool:
+    """Một trong các cụm này có đứng SÁT NGAY SAU con số (và đơn vị) không?"""
+    t = sau.lstrip()
+    return any(re.match(rf"{re.escape(w)}\b", t) for w in tu)
+
+
+def _dau_so_sanh(t: str) -> str:
+    """Đổi dấu so sánh thành chữ TRƯỚC khi các bước chuẩn hoá xoá ký tự lạ.
+
+    "<3 tỷ", "≤ 60m2", "> 5 tầng" là cách gõ nhanh rất hay gặp. Bước chuẩn
+    hoá xoá mọi ký tự không phải chữ/số, nên nếu không đổi trước thì dấu biến
+    mất và con số rơi về mặc định — "> 3 tỷ" từng bị hiểu thành "dưới 3 tỷ".
+    """
+    t = re.sub(r"[–—]", "-", str(t))          # gạch dài cũng là khoảng: "3–5 tỷ"
+    t = re.sub(r"(?:<=|=<|≤|<)", " duoi ", t)
+    t = re.sub(r"(?:>=|=>|≥|>)", " tren ", t)
+    # Cụm so sánh CÓ DẤU đổi thẳng ra từ khoá, trước khi bỏ dấu. Lý do: bỏ dấu
+    # rồi thì "thấp hơn" trùng "Tháp hơn" — "mặt phố Thọ Tháp hơn 80 tỷ" từng
+    # bị đọc thành "dưới 80 tỷ". Ở đây còn dấu nên phân biệt được.
+    t = re.sub(r"\b(?:nhỏ|ít|bé|thấp|rẻ)\s+hơn\b|\bkhông\s+(?:vượt\s+)?quá\b",
+               " duoi ", ud.normalize("NFC", t), flags=re.IGNORECASE)
+    t = re.sub(r"\b(?:lớn|cao|nhiều|đắt)\s+hơn\b|\bít\s+nhất\b",
+               " tren ", t, flags=re.IGNORECASE)
+    # Dấu ngắt câu thành một dấu chấm đứng riêng, để cụm so sánh không "nhảy"
+    # qua ranh giới câu: "Siêu rẻ! Hơn 200tr/m2" là "hơn 200tr/m2", không
+    # phải "rẻ hơn 200tr/m2". Dấu chấm được giữ lại qua bước chuẩn hoá.
+    # KHÔNG đổi gạch ngang: "3 - 5 tỷ" là một khoảng giá.
+    # KHÔNG đổi dấu hai chấm: "MT: 4,5m", "Giá: 5 tỷ" — nhãn đi liền con số.
+    return re.sub(r"[!?;\n\r|]+", " . ", t)
 # "khoảng 5 tỷ" là MỘT DẢI quanh 5 tỷ, không phải trần 5 tỷ. Trước đây gộp
 # chung vào _TU_DUOI nên "khoảng 5 tỷ" thành "dưới 5 tỷ" — người muốn xem căn
 # 5,2 tỷ không bao giờ thấy nó.
@@ -183,7 +229,9 @@ _BIEN_XAP_XI = 0.10          # ±10% quanh con số người dùng nêu
 
 # Đơn vị đứng SAU phần lẻ thì phần lẻ đó không phải phần lẻ của tiền:
 # "3 tỷ 2 ngủ" là "3 tỷ" rồi "2 phòng ngủ", không phải "3,2 tỷ".
-_SAU_PHAN_LE = r"(?!\s*(?:pn|phong|ngu|wc|vs|ve sinh|tang|m2|m²|met|m\b|ty|tỷ|ti|tỉ|tr|trieu))"
+# "tr" và "ti" phải có ranh giới từ: không có thì "2 tỷ 8 TRở xuống" khớp
+# nhầm "tr" (triệu) và rơi về "2 tỷ".
+_SAU_PHAN_LE = r"(?!\s*(?:pn|phong|ngu|wc|vs|ve sinh|tang|m2|m²|met|m\b|ty|tỷ|ti\b|tỉ|tr\b|trieu))"
 
 
 # SỐ TIỀN KHÔNG PHẢI GIÁ CĂN
@@ -211,7 +259,7 @@ _GIAM_CO_DAU = re.compile(
 
 def _chu_tien(cau: str) -> str:
     """Như `_chuan_so` nhưng giữ dấu "/" để nhận ra "tr/m2", "tr/tháng"."""
-    t = _bo_dau(_GIAM_CO_DAU.sub(" ", ud.normalize("NFC", str(cau).lower())))
+    t = _bo_dau(_GIAM_CO_DAU.sub(" ", ud.normalize("NFC", _dau_so_sanh(cau).lower())))
     t = re.sub(r"[^a-z0-9\s.,~/-]", " ", t)
     return " ".join(t.split())
 
@@ -221,6 +269,8 @@ def _xoa_tien_khong_phai_gia(t: str) -> str:
     so = r"\d+[.,]?\d*"
     t = re.sub(rf"(?:{so}\s*(?:-|den|toi)\s*)?{so}\s*(?:{dv})"
                rf"(?:{_TIEN_TREN_M2}|{_TIEN_THEO_THOI_GIAN})", " ", t)
+    # "rẻ hơn 500 triệu SO VỚI giá thị trường" — mức chênh, không phải giá.
+    t = re.sub(rf"{so}\s*(?:{dv})\s+so voi\b", " ", t)
     truoc = "|".join(sorted(_TRUOC_TIEN_KHONG_PHAI_GIA, key=len, reverse=True))
     t = re.sub(rf"\b(?:{truoc})\s+(?:gia\s+)?{so}\s*(?:{dv})\b", " ", t)
     return t
@@ -234,7 +284,7 @@ def doc_don_gia(cau: str) -> dict:
     """
     t = _chu_tien(cau)
     dv = "|".join(sorted(_DV_TIEN, key=len, reverse=True))
-    m = re.search(rf"(\d+[.,]?\d*)\s*(?:{dv})?\s*(?:-|den|toi)\s*"
+    m = re.search(rf"(?<![a-z\d.,])(\d+[.,]?\d*)\s*(?:{dv})?\s*(?:-|den|toi)\s*"
                   rf"(\d+[.,]?\d*)\s*({dv}){_TIEN_TREN_M2}", t)
     if m:
         k = _DV_TIEN[m.group(3)]
@@ -245,7 +295,7 @@ def doc_don_gia(cau: str) -> dict:
     if not m:
         return {}
     so = float(m.group(1).replace(",", ".")) * _DV_TIEN[m.group(2)]
-    h = _huong_gia(so, t[max(0, m.start() - 22):m.start()])
+    h = _huong_gia(so, t[max(0, m.start() - 22):m.start()], t[m.end():m.end() + 14])
     return {k.replace("gia_", "gia_m2_"): v for k, v in h.items()}
 
 
@@ -273,8 +323,12 @@ def doc_gia(cau: str) -> dict:
     ty = "|".join(_DV_TY)
 
     # (1) khoảng: "3 - 5 ty", "3 den 5 ty", "tu 3 toi 5 ty"
-    m = re.search(rf"(\d+[.,]?\d*)\s*(?:{dv})?\s*(?:-|den|tới|toi|~)\s*"
-                  rf"(\d+[.,]?\d*)\s*({dv})\b", t)
+    #     Số đầu KHÔNG được dính chữ đằng trước: "37m2 - 5.85 tỷ" không phải
+    #     khoảng "2–5,85 tỷ" (chữ số 2 của "m2"). Và bỏ đơn vị "b": "233 - 233B
+    #     Nguyễn Trãi" là số nhà, không phải khoảng giá 233 tỷ.
+    m = next((x for x in re.finditer(
+        rf"(?<![a-z\d.,])(\d+[.,]?\d*)\s*(?:{dv})?\s*(?:-|den|tới|toi|~)\s*"
+        rf"(\d+[.,]?\d*)\s*({dv})\b", t) if x.group(3) != "b"), None)
     if m:
         k = _DV_TIEN[m.group(3)]
         a = float(m.group(1).replace(",", ".")) * k
@@ -288,7 +342,7 @@ def doc_gia(cau: str) -> dict:
         le = m.group(3)
         so = (float(m.group(1)) + float(le) / 10 ** len(le)) * 1e9
         truoc = t[max(0, m.start() - 22):m.start()]
-        return _huong_gia(so, truoc)
+        return _huong_gia(so, truoc, t[m.end():m.end() + 14])
 
     # (3) một số kèm đơn vị, xem từ đứng trước để biết sàn, trần hay dải.
     #     "b" (billion) chỉ nhận khi KHÔNG phải số nhà: "ngõ 28B" không phải
@@ -304,7 +358,7 @@ def doc_gia(cau: str) -> dict:
     if not m:
         return {}
     so = float(m.group(1).replace(",", ".")) * _DV_TIEN[m.group(2)]
-    return _huong_gia(so, t[max(0, m.start() - 22):m.start()])
+    return _huong_gia(so, t[max(0, m.start() - 22):m.start()], t[m.end():m.end() + 14])
 
 
 def _ke_ngay_truoc(truoc: str, tu: tuple) -> bool:
@@ -336,11 +390,22 @@ def _xap_xi(truoc: str) -> bool:
     return _ke_ngay_truoc(truoc, _TU_XAP_XI)
 
 
-def _huong_gia(so: float, truoc: str) -> dict:
-    """Con số này là sàn, trần, hay một dải quanh nó? Xét từ đứng SÁT trước."""
+def _huong_gia(so: float, truoc: str, sau: str = "") -> dict:
+    """Con số này là sàn, trần, hay một dải quanh nó?
+
+    Xét theo thứ tự: xấp xỉ -> cụm SAU số ("trở xuống", "trở lên") -> cụm
+    trần đứng trước ("dưới", "nhỏ hơn") -> cụm sàn đứng trước ("trên",
+    "hơn") -> mặc định là trần. Xem ghi chú ở `_TU_DUOI` về thứ tự.
+    """
     if _xap_xi(truoc):
         return {"gia_tu": so * (1 - _BIEN_XAP_XI),
                 "gia_den": so * (1 + _BIEN_XAP_XI)}
+    if _ke_ngay_sau(sau, _SAU_DUOI):
+        return {"gia_den": so}
+    if _ke_ngay_sau(sau, _SAU_TREN):
+        return {"gia_tu": so}
+    if _ke_ngay_truoc(truoc, _TU_DUOI):
+        return {"gia_den": so}
     if _ke_ngay_truoc(truoc, _TU_TREN):
         return {"gia_tu": so}
     return {"gia_den": so}          # mặc định: coi là trần
@@ -395,7 +460,9 @@ def doc_dien_tich(cau: str) -> dict:
                     or re.search(r"\bcach(?:\s+[a-z]+){0,2}\s*$", truoc)):
                 continue            # đây là một chiều dài, không phải diện tích
             so = float(m.group(1).replace(",", "."))
-            if _ke_ngay_truoc(truoc, _TU_DUOI):
+            if _ke_ngay_sau(sau, _SAU_DUOI) or (
+                    _ke_ngay_truoc(truoc, _TU_DUOI)
+                    and not _ke_ngay_sau(sau, _SAU_TREN)):
                 return {"dt_den": so}
             # "60 m2" một mình: hiểu là TỪ 60 trở lên. Người mua nói diện tích
             # thường là nói mức tối thiểu họ cần ở được — ngược với tiền.
@@ -450,17 +517,20 @@ def doc_kich_thuoc(cau: str) -> dict:
         so = float(m.group(1).replace(",", "."))
         so = int(so) if so.is_integer() else so
         truoc = t[max(0, m.start() - 24):m.start()]
-        if _ke_ngay_truoc(truoc, _TU_DUOI):
+        sau = t[m.end():m.end() + 14]
+        if _ke_ngay_sau(sau, _SAU_DUOI) or (
+                _ke_ngay_truoc(truoc, _TU_DUOI)
+                and not _ke_ngay_sau(sau, _SAU_TREN)):
             ra["tang_den"] = so
         else:
             ra["tang_tu"] = so
 
-    m = re.search(r"(?:mat tien|mt|ngang)\s*(?:rong\s*)?"
+    m = re.search(r"(?:mat tien|mt|ngang)\s*(?:rong\s*)?(?:tren\s*|tu\s*)?"
                   r"(\d+[.,]?\d*)\s*m?\b", t)
     if m:
         ra["mt_tu"] = float(m.group(1).replace(",", "."))
 
-    m = re.search(r"(?:ngo|hem|duong vao|duong)\s*(?:rong\s*)?"
+    m = re.search(r"(?:ngo|hem|duong vao|duong)\s*(?:rong\s*)?(?:tren\s*|tu\s*)?"
                   r"(\d+[.,]?\d*)\s*m\b", t)
     if m:
         ra["ngo_tu"] = float(m.group(1).replace(",", "."))
@@ -1570,12 +1640,30 @@ def tim(cau: str, loai: str, dk_them: dict | None = None,
                 "loai": loai, "sap": sap, "thong_ke": thong_ke,
                 "ghi_chu": ghi_chu, "goi_y_gia": goi_y_gia}
 
+    # TIN MỚI ĐỨNG TRƯỚC KHI HOÀ ĐIỂM.
+    #
+    # Lỗi người dùng báo 21/10/2026: kết quả gần như toàn tin Chợ Tốt, mà tin
+    # Chợ Tốt là đợt cào tháng 6 — link đã chết từ lâu. Nguyên nhân không phải
+    # lọc mà là XẾP: câu không nêu giá hay diện tích ("chung cư Cầu Giấy",
+    # "nhà Đống Đa") thì mọi căn đều 0 điểm "khớp nhất", và sort_values giữ
+    # nguyên thứ tự gốc của bảng — mà bảng gộp đặt đợt Chợ Tốt tháng 6 lên
+    # đầu. Đo trên 8 câu thường gặp: 10 kết quả đầu có 10–100% tin Chợ Tốt,
+    # tuổi tin trung bình 93–130 ngày, dù Chợ Tốt chỉ chiếm 32–44% dữ liệu.
+    # Nên mọi cách xếp đều có khoá phụ: cùng điểm thì tin quan sát gần đây
+    # hơn đứng trước. Khoá phụ không đè lên ý người dùng — chỉ phân xử hoà.
+    kq = kq.assign(_ngay=pd.to_datetime(kq.get("ngay_quan_sat"),
+                                        errors="coerce"))
+
+    def _xep(cot, tang=True):
+        return kq.sort_values([cot, "_ngay"], ascending=[tang, False],
+                              kind="stable", na_position="last")
+
     if sap == "re_nhat":
-        kq = kq.sort_values("TARGET_gia_vnd")
+        kq = _xep("TARGET_gia_vnd")
     elif sap == "lech_thap" and "lech_phan_tram" in kq.columns:
-        kq = kq.sort_values("lech_phan_tram")
+        kq = _xep("lech_phan_tram")
     elif sap == "lech_cao" and "lech_phan_tram" in kq.columns:
-        kq = kq.sort_values("lech_phan_tram", ascending=False)
+        kq = _xep("lech_phan_tram", tang=False)
     else:
         # "khớp nhất": gần giữa khoảng người dùng nêu nhất. Nếu họ chỉ nêu
         # trần giá thì mốc là chính cái trần — người có 5 tỷ thường muốn xem
@@ -1587,7 +1675,9 @@ def tim(cau: str, loai: str, dk_them: dict | None = None,
             diem += (kq["TARGET_gia_vnd"] - moc_g).abs() / moc_g
         if moc_d:
             diem += (kq[cot_dt] - moc_d).abs() / moc_d
-        kq = kq.assign(_diem=diem).sort_values("_diem").drop(columns="_diem")
+        kq = kq.assign(_diem=diem)
+        kq = _xep("_diem").drop(columns="_diem")
+    kq = kq.drop(columns="_ngay")
 
     return {"dk": dk, "so_khop": int(mat_na.sum()),
             "ket_qua": kq.head(k).reset_index(drop=True),

@@ -571,8 +571,7 @@ def hero_header(subtitle_html: str | None = None) -> None:
                 <div style="font-family:Newsreader,Georgia,serif;font-size:1.62rem;font-weight:600;
                     color:{COLOR['text']};line-height:1.12;letter-spacing:-0.012em;">Hệ thống định giá Bất động sản Hà Nội</div>
                 <div style="color:{COLOR['text_muted']};font-size:0.82rem;margin-top:0.4rem;">
-                     {sub}Theo <b style="color:{COLOR['text']}">giá đang chào bán</b>,
-                     không phải giá đã chốt.</div>
+                     {sub}</div>
             </div>
         </div>
         """,
@@ -730,12 +729,6 @@ def _thanh_yeu_to(yeu_to: list[dict], gia_co_so: float | None = None,
             f'</div>')
 
     st.markdown("".join(hang), unsafe_allow_html=True)
-    # Bỏ câu "thanh sang phải là tăng, sang trái là giảm" — dấu +/− ngay trong
-    # con số đã nói điều đó rồi, viết lại là thừa. Giữ câu cộng-khớp (đó là
-    # thứ mời người đọc tự kiểm) và thêm một mệnh đề cảnh báo nhân quả, vì nó
-    # quan trọng mà đang nằm ở tận khối "Đọc kết quả" phía dưới.
-    st.caption("Cộng cột bên phải ra đúng giá ước tính. Đây là cách máy lần ra "
-               "con số, không phải gợi ý nên sửa gì để bán đắt hơn.")
 
 
 # =============================================================================
@@ -837,7 +830,6 @@ def _bang_comparables(cmp_df: pd.DataFrame, cot_dt: str,
     st.caption(f"Lấy trong **{pham_vi}**, sắp theo **diện tích gần nhất**. "
                f"Giá không tham gia việc chọn.")
 
-    dt_ban = (dac_diem or {}).get(cot_dt)
     hien = pd.DataFrame({
         "Giá rao": cmp_df["TARGET_gia_vnd"].map(format_ty),
         "Giá/m²": (cmp_df["gia_tren_m2"] / 1e6).round(1).astype(str) + " tr",
@@ -853,12 +845,6 @@ def _bang_comparables(cmp_df: pd.DataFrame, cot_dt: str,
         hien["Đường"] = [
             (f"{d} (?)" if isinstance(d, str) and d and not ok else d)
             for d, (_, ok) in zip(hien["Đường"], chac)]
-    # Cột "Lệch diện tích" làm tiêu chí sắp xếp hiện ra thành số kiểm được:
-    # người xem thấy đúng là bảng tăng dần theo cột này.
-    if dt_ban:
-        lech = (cmp_df[cot_dt] - dt_ban) / dt_ban * 100
-        hien.insert(3, "Lệch diện tích",
-                    lech.map(lambda x: f"{x:+.0f}%" if pd.notna(x) else "—"))
     # Cột "Đã lưu" thay cho việc chỉ dán link: tin rao bị sàn xoá sau ~30
     # ngày, nên ngày lưu là thông tin người xem cần để biết căn này còn nói
     # được gì về thị trường hôm nay. Link chỉ hiện khi còn cơ hội mở được.
@@ -881,15 +867,6 @@ def _bang_comparables(cmp_df: pd.DataFrame, cot_dt: str,
     else:
         st.dataframe(hien, hide_index=True, width='stretch')
 
-    if "Địa chỉ" in hien.columns:
-        # Bản cũ mở đầu bằng "Cột Địa chỉ cho biết hệ thống xác định được vị
-        # trí tới mức nào" — một câu mô tả cái bảng, trong khi người đọc đang
-        # nhìn thẳng vào cái bảng đó. Vào luôn nghĩa của cái nhãn khó hiểu.
-        st.caption(
-            "**“chỉ biết phường”** = không tìm thấy con đường người bán ghi. "
-            "Tên đường vẫn hiện kèm **(?)**, còn ghim thì đặt giữa phường. "
-            "Tin rao ghi sai địa chỉ là chuyện thường, hệ thống chép lại chứ "
-            "không sửa hộ.")
 
     with st.expander("Xem nội dung 5 tin này (bản đã lưu)"):
         st.caption(
@@ -998,8 +975,6 @@ def _khoi_tien_ich(dac_diem: dict) -> None:
                      border-radius:99px;"></div>
               </div>
             </div>""", unsafe_allow_html=True)
-    st.caption("Nguồn OpenStreetMap — ngoại thành hay bị chấm thấp vì OSM gắn "
-               "thẻ thưa.")
 
 
 MUC_TOA_DO = {
@@ -1411,27 +1386,6 @@ def render_chungcu() -> None:
                 st.markdown(
                     "Nhập thông tin căn hộ bên trái, chọn **Quận → Phường → Dự án** "
                     "rồi bấm **Định giá ngay** để xem mức giá ước lượng.")
-
-        with st.container(border=True):
-            section_header(ICON_INFO, "Đọc kết quả thế nào cho đúng", "")
-            st.markdown(
-                # Bốn gạch đầu dòng xuống còn hai.
-                #
-                # Gạch "độ tin cậy thấp" bỏ hẳn: giờ đã có cảnh báo phường mỏng
-                # hiện NGAY DƯỚI con số giá, kèm số căn thật. Nói lại ở đây là
-                # bắt người đọc đọc hai lần cùng một ý.
-                # Gạch "các yếu tố ±" chuyển xuống ngay dưới bảng thác nước —
-                # cảnh báo mà đứng cách xa thứ nó cảnh báo thì không ai nối
-                # được hai cái với nhau.
-                #
-                # Và sửa một lỗi sót: bản cũ ghi "khoảng vàng", chữ còn lại từ
-                # hệ màu vàng kim đã bỏ. Giao diện giờ không có gì màu vàng,
-                # nên người đọc tìm mãi không thấy.
-                "- Đừng bám vào con số ở giữa. Khoảng giá mới là thứ mang ra "
-                "thương lượng.\n"
-                "- Khoảng rộng không phải vì máy đoán dở. Hai căn giống hệt "
-                "nhau ngoài đời cũng đã chào chênh nhau cỡ 20%."
-            )
 
 
 def render_project_selector(cay: dict, quan: str, phuong: str) -> str:
@@ -1955,8 +1909,6 @@ def render_ban_do() -> None:
         format_func=lambda x: "Nhà đất (giá/m² đất)" if x == "nhadat"
         else "Chung cư (giá/m² sàn)",
         horizontal=True, key="bd_loai")
-    st.caption("Giá/m² đất và giá/m² sàn là hai đại lượng khác nhau nên tách "
-               "riêng.")
 
     # TÌM QUANH MỘT ĐIỂM LÊN ĐẦU TIÊN.
     #
@@ -2091,16 +2043,15 @@ def _ban_do_ghim(loai: str, pdk) -> None:
     n_chac = int(x["chinh_xac"].sum())
     if o_luoi > 0:
         st.caption(
-            f"Đang hiện **{_so(len(x))} chấm đại diện** cho {_so(n_goc)} căn — "
-            f"mỗi ô lưới {o_luoi} km giữ một điểm đông căn nhất, để bản đồ "
-            f"đỡ rối. **Chọn một quận** ở trên để hiện dày hơn, hoặc thu hẹp "
-            f"khoảng giá xuống dưới 400 căn để hiện hết.")
+            f"Đang hiện **{_so(len(x))} chấm đại diện** cho {_so(n_goc)} căn. "
+            f"**Chọn một quận** ở trên để hiện dày hơn, hoặc thu hẹp khoảng giá "
+            f"xuống dưới 400 căn để hiện hết.")
     else:
         st.caption(f"Đang hiện đủ **{_so(len(x))} căn**.")
     st.caption(
         f"Chấm đậm viền rõ là **{_so(n_chac)} căn có vị trí chính xác** (nơi "
         f"đăng tự công bố); chấm mờ là căn đặt theo tên đường hoặc phường, lệch "
-        f"khoảng 0,67–0,79 km — ghim chỉ đúng khu vực, không đúng căn nhà.")
+        f"khoảng 0,67–0,79 km.")
 
     _hien_tin_da_chon(su_kien, x)
 
@@ -2202,20 +2153,6 @@ def _choropleth(loai: str, pdk) -> None:
     ), width='stretch')
 
     _chu_giai_vung(v)
-    # Con số trong câu này LẤY TỪ HẰNG SỐ, không gõ tay. Trước đây nó ghi
-    # cứng "chưa đủ 5 căn"; nâng ngưỡng lên 20 mà quên sửa câu thì giao diện
-    # nói một đằng, bản đồ tô một nẻo — và không có gì báo.
-    st.caption(
-        f"Tô màu **{v['so_vung_du_tin']}/{v['so_vung']}** phường/xã. Phần để "
-        f"trắng gạch là phường **chưa đủ {bd.N_TOI_THIEU_PHUONG} căn** — vẫn "
-        f"vẽ ra để hình Hà Nội liền mạch, chứ không bỏ trống, vì chỗ trống "
-        f"trông y hệt phần không thuộc thành phố. Rê chuột lên một phường để "
-        f"xem giá trung vị, khoảng giá phổ biến, và số căn làm căn cứ.")
-    st.caption(
-        "Mỗi phường được tô theo những căn **nằm trong ranh giới của nó**, "
-        "không phải theo tên phường ghi trong nội dung rao. Ở nội thành, nơi "
-        "phường chỉ rộng chưa tới 1 km mà vị trí thường lệch khoảng 0,7 km, một "
-        "phần có thể rơi sang phường bên cạnh — nên luôn đọc giá cùng với số căn.")
 
 
 def _ghim_tu_do(loai: str, khoa: str) -> tuple:
@@ -2261,6 +2198,129 @@ def _ghim_tu_do(loai: str, khoa: str) -> tuple:
     return (st.session_state.get(k_ghim) or [None, None])[0], \
            (st.session_state.get(k_ghim) or [None, None])[1], \
            st.session_state.get(k_ten) or ""
+
+
+# GHIM TRÊN BẢN ĐỒ: GOM CỤM, PHÓNG TO THÌ TÁCH RA TỪNG CĂN
+# --------------------------------------------------------
+# Lịch sử ba bản, để khỏi lặp lại:
+#   1. Vẽ 150 căn GẦN NHẤT, mỗi căn một CircleMarker. Ở khu đông tin 150 căn
+#      đó nằm gọn trong ~1 km, nên kéo bán kính lên 3–5 km bản đồ y nguyên.
+#   2. 40 căn gần nhất + 110 căn ngẫu nhiên. Rải khắp vòng tròn nhưng vẫn bỏ
+#      sót 72–96% số căn — người tìm một căn cụ thể có thể không bao giờ thấy.
+#   3. (bản này) GOM CỤM ngay trên trình duyệt. Gửi MỌI căn xuống một lần dưới
+#      dạng mảng dữ liệu gọn, Leaflet.markercluster tự gom: nhìn xa thấy vòng
+#      tròn có số, phóng to thì cụm tách dần thành từng căn. Phóng to/kéo bản
+#      đồ không gọi lại máy chủ (st_folium chỉ trả về `last_clicked`).
+#
+# Đo ngày 21/10/2026, Đống Đa bán kính 5 km, 5.375 căn:
+#   mỗi căn một CircleMarker kèm popup: 8,1 MB HTML, dựng 8,0 giây
+#   gom cụm (FastMarkerCluster):        0,18 MB,   dựng 0,35 giây
+# Nhẹ hơn cả bản 150 ghim (0,22 MB) dù hiện đủ gấp 36 lần số căn.
+#
+# Nhiều tin dùng CHUNG một toạ độ (điểm ghim của con đường). Ở mức phóng to
+# lớn nhất, bấm vào cụm đó thì các căn xoè ra thành hình nan quạt (spiderfy)
+# — mặc định của markercluster — nên vẫn bấm được từng căn.
+
+# Chấm của một căn: L.marker với divIcon (không dùng L.circleMarker vì
+# markercluster hỗ trợ marker thường chắc chắn nhất, cả lúc xoè nan quạt).
+#
+# Popup DỰNG Ở TRÌNH DUYỆT từ các trường thô, không gửi sẵn HTML từ Python:
+# gửi sẵn HTML thì mỗi căn tốn ~450 byte và 3.600 căn đã thành 1,75 MB, mà
+# khối này được gửi lại sau MỖI lần bấm bản đồ hay kéo thanh bán kính. Chữ
+# lấy từ tin rao được chèn bằng textContent nên không cần thoát HTML bằng tay.
+#   row = [vĩ độ, kinh độ, "x,xx tỷ", "yy m²", "zz,z triệu/m²",
+#          "đường · phường", "cách k,kk km", url hoặc ""]
+_JS_MOT_CAN = """
+function (row) {
+    var icon = L.divIcon({
+        className: "",
+        html: '<div style="box-sizing:border-box;width:16px;height:16px;border-radius:50%;'
+            + 'background:__MAU__;border:2px solid #FFFFFF;'
+            + 'box-shadow:0 0 2px rgba(0,0,0,.45);"></div>',
+        iconSize: [16, 16], iconAnchor: [8, 8]
+    });
+    var m = L.marker(new L.LatLng(row[0], row[1]), {icon: icon});
+    m.bindPopup(function () {
+        var d = document.createElement("div");
+        var b = document.createElement("b");
+        b.textContent = row[2];
+        d.appendChild(b);
+        d.appendChild(document.createTextNode(" · " + row[3]));
+        [row[4], row[5], row[6]].forEach(function (t) {
+            d.appendChild(document.createElement("br"));
+            d.appendChild(document.createTextNode(t));
+        });
+        d.appendChild(document.createElement("br"));
+        if (row[7]) {
+            var a = document.createElement("a");
+            a.href = row[7]; a.target = "_blank"; a.rel = "noopener";
+            a.textContent = "Mở tin gốc ↗";
+            d.appendChild(a);
+        } else {
+            var s = document.createElement("span");
+            s.style.color = "#888";
+            s.textContent = "không còn link tin gốc";
+            d.appendChild(s);
+        }
+        return d;
+    }, {maxWidth: 260});
+    m.bindTooltip(row[2] + " · " + row[3]);
+    return m;
+}
+"""
+
+# Vòng tròn cụm: cùng màu nhấn của app, to dần theo số căn.
+_JS_CUM = """
+function (cluster) {
+    var n = cluster.getChildCount();
+    var s = n < 10 ? 28 : (n < 100 ? 34 : (n < 1000 ? 42 : 50));
+    return L.divIcon({
+        className: "",
+        // Căn giữa số bằng flexbox. Bản đầu dùng line-height rồi viết
+        // `font:600 12px sans-serif` SAU nó — thuộc tính rút gọn `font` đặt
+        // lại line-height về mặc định, nên số bị đẩy lệch lên nửa trên vòng
+        // tròn. `box-sizing:border-box` để viền nằm TRONG kích thước s, vòng
+        // tròn mới đúng tâm điểm neo.
+        html: '<div style="box-sizing:border-box;width:' + s + 'px;height:'
+            + s + 'px;display:flex;align-items:center;justify-content:center;'
+            + 'border-radius:50%;background:__MAU__;color:#FFFFFF;'
+            + 'font-family:sans-serif;font-size:12px;font-weight:600;'
+            + 'line-height:1;border:2px solid #FFFFFF;'
+            + 'box-shadow:0 0 3px rgba(0,0,0,.4);opacity:.92;">' + n + '</div>',
+        iconSize: L.point(s, s)
+    });
+}
+"""
+
+
+def _dong_can(r: pd.Series) -> list:
+    """Một dòng dữ liệu gọn cho `_JS_MOT_CAN` (xem thứ tự trường ở trên)."""
+    u = r.get("url_goc")
+    tuoi = _tuoi_tin(r)
+    con_link = (isinstance(u, str) and u.startswith("http")
+                and (tuoi is None or tuoi <= HAN_LINK_CU))
+    noi = " · ".join(str(x) for x in (r.get("duong_pho"), r.get("phuong_moi"))
+                     if isinstance(x, str) and x)
+    return [round(float(r["latitude"]), 6), round(float(r["longitude"]), 6),
+            f'{_sole(r["TARGET_gia_vnd"]/1e9, 2)} tỷ',
+            f'{_so(r["dien_tich"])} m²',
+            f'{_sole(r["gia_tren_m2"]/1e6, 1)} triệu/m²',
+            noi, f'cách {_sole(r["khoang_cach_km"], 2)} km',
+            u if con_link else ""]
+
+
+def _lop_gom_cum(quanh: pd.DataFrame):
+    """Lớp gom cụm chứa MỌI căn trong bán kính."""
+    from folium.plugins import FastMarkerCluster
+    q = quanh.dropna(subset=["latitude", "longitude"])
+    return FastMarkerCluster(
+        [_dong_can(r) for _, r in q.iterrows()],
+        callback=_JS_MOT_CAN.replace("__MAU__", COLOR["accent"]),
+        icon_create_function=_JS_CUM.replace("__MAU__", COLOR["accent"]),
+        # Không vẽ đường bao vùng cụm khi rê chuột: rối mắt trên nền bản đồ.
+        showCoverageOnHover=False,
+        maxClusterRadius=45,
+        name="Các căn đang bán", control=False)
 
 
 def _khoi_ban_do(loai: str, pdk=None) -> None:
@@ -2325,6 +2385,17 @@ def _khoi_ban_do(loai: str, pdk=None) -> None:
     m = folium.Map(location=[vi, kinh], zoom_start=15 if not chua_chon else 12,
                    tiles=None, control_scale=True)
     _nen_ban_do(m, folium)
+    # markercluster CẦN bản đồ có maxZoom. Lớp nền có max_zoom, nhưng dây
+    # chuyền dự phòng nền có thể gỡ lớp đó ra; đặt thẳng lên bản đồ cho chắc
+    # (thiếu thì lỗi "Map has no maxZoom specified" và không gom cụm được).
+    m.options["maxZoom"] = 19
+    if not chua_chon:
+        # Khung nhìn ôm vừa vòng tròn. Bản trước cố định mức zoom 15 (khung
+        # rộng chừng 2 km), nên bán kính 3–5 km thì vòng tròn tràn ra ngoài
+        # màn hình và trông như không có gì thay đổi.
+        d_vi = ban_kinh / 111.0
+        d_kinh = ban_kinh / (111.0 * np.cos(np.radians(vi)))
+        m.fit_bounds([[vi - d_vi, kinh - d_kinh], [vi + d_vi, kinh + d_kinh]])
     folium.Circle([vi, kinh], radius=ban_kinh * 1000,
                   color=COLOR["accent"], weight=2, fill=True,
                   fill_color=COLOR["accent"], fill_opacity=0.05,
@@ -2332,32 +2403,8 @@ def _khoi_ban_do(loai: str, pdk=None) -> None:
     folium.Marker([vi, kinh], tooltip="Điểm bạn đang xem quanh",
                   icon=folium.Icon(color="darkblue", icon="screenshot")).add_to(m)
 
-    # GHIM TỪNG CĂN, POPUP CÓ LINK. Chỉ vẽ 150 căn gần nhất: folium dựng ghim
-    # bằng HTML thật nên vài trăm ghim là trang đứng hình.
-    for _, r in quanh.head(150).iterrows():
-        u = r.get("url_goc")
-        tuoi = _tuoi_tin(r)
-        if isinstance(u, str) and u.startswith("http") and \
-                (tuoi is None or tuoi <= HAN_LINK_CU):
-            lk = (f'<br><a href="{u}" target="_blank" '
-                  f'rel="noopener">Mở tin gốc ↗</a>')
-        else:
-            lk = '<br><span style="color:#888">không còn link tin gốc</span>'
-        pop = (f'<b>{_sole(r["TARGET_gia_vnd"]/1e9, 2)} tỷ</b> · '
-               f'{_so(r["dien_tich"])} m²<br>'
-               f'{r["gia_m2_trieu"] if "gia_m2_trieu" in r else ""}'
-               f'{_sole(r["gia_tren_m2"]/1e6, 1)} triệu/m²<br>'
-               f'{r.get("duong_pho") or ""} · {r.get("phuong_moi") or ""}<br>'
-               f'cách {r["khoang_cach_km"]:.2f} km{lk}')
-        folium.CircleMarker(
-            [r["latitude"], r["longitude"]], radius=6,
-            # Viền TRẮNG quanh mỗi chấm: trên nền bản đồ sáng, chấm không có
-            # viền thì chìm vào nền ở những khu nhạt màu.
-            color="#FFFFFF", weight=2, fill=True,
-            fill_color=COLOR["accent"], fill_opacity=0.95,
-            popup=folium.Popup(pop, max_width=260),
-            tooltip=f'{_sole(r["TARGET_gia_vnd"]/1e9, 2)} tỷ · '
-                    f'{_so(r["dien_tich"])} m²').add_to(m)
+    # MỌI CĂN, GOM CỤM — xem ghi chú ở `_lop_gom_cum`.
+    _lop_gom_cum(quanh).add_to(m)
 
     # CHỈ nhận `last_clicked` (bấm vào nền bản đồ), KHÔNG nhận
     # `last_object_clicked`. Nhờ vậy bấm vào một ghim căn nhà chỉ mở popup của
@@ -2376,8 +2423,12 @@ def _khoi_ban_do(loai: str, pdk=None) -> None:
                    "Đang tạm lấy Hồ Hoàn Kiếm.")
     else:
         st.caption(f"Đang xem quanh **{ten or f'{vi:.5f}, {kinh:.5f}'}** · "
-                   f"bấm chỗ khác trên bản đồ để đổi điểm · bấm một chấm vàng "
+                   f"bấm chỗ khác trên bản đồ để đổi điểm · bấm một chấm tròn "
                    f"để xem căn đó.")
+    if len(quanh) > 1:
+        st.caption(f"Bản đồ có đủ {_so(len(quanh))} căn. Vòng tròn có số là một "
+                   f"cụm căn gần nhau — **phóng to** (hoặc bấm vào cụm) để tách "
+                   f"ra từng căn.")
 
     if quanh.empty:
         st.info(f"Không có căn nào trong bán kính {ban_kinh} km. "
@@ -2420,11 +2471,14 @@ def _khoi_ban_do(loai: str, pdk=None) -> None:
             u = u.where(tuoi.isna() | (tuoi <= HAN_LINK_CU))
         # Ô trống phải là chuỗi rỗng: để NaN/None thì bảng in chữ "None".
         hien["Tin gốc"] = u.astype(object).where(u.notna(), "")
-        st.dataframe(hien.head(200), hide_index=True, width='stretch',
+        # Bảng liệt kê ĐỦ mọi căn trong bán kính (bản trước cắt ở 200 căn gần
+        # nhất, nên nới bán kính cũng không thấy thêm dòng nào). st.dataframe
+        # chỉ vẽ phần đang cuộn tới, vài nghìn dòng vẫn nhẹ.
+        st.dataframe(hien, hide_index=True, width='stretch',
                      column_config={"Tin gốc": st.column_config.LinkColumn(
                          "Tin gốc", display_text="mở")})
     else:
-        st.dataframe(hien.head(200), hide_index=True, width='stretch')
+        st.dataframe(hien, hide_index=True, width='stretch')
 
 
 # =============================================================================
@@ -3227,12 +3281,14 @@ def main() -> None:
     if "Chung cư" in mode:
         hero_header(
             f'Định giá <b style="color:{COLOR["text"]}">căn hộ chung cư</b> — '
-            "chọn quận, phường, dự án rồi nhập vài thông số cơ bản.")
+            "chọn quận, phường, dự án rồi nhập vài thông số cơ bản, hệ thống "
+            "sẽ định giá theo giá đang chào bán.")
         render_chungcu()
     elif "Nhà đất" in mode:
         hero_header(
             f'Định giá <b style="color:{COLOR["text"]}">nhà đất thổ cư</b> — '
-            "nhà ngõ hẻm, mặt phố, liền kề, biệt thự.")
+            "nhà ngõ hẻm, mặt phố, liền kề, biệt thự. Hệ thống sẽ định giá "
+            "theo giá đang chào bán.")
         render_nhadat()
     elif "Khu vực" in mode:
         hero_header(
@@ -3243,8 +3299,8 @@ def main() -> None:
     else:
         hero_header(
             f'<b style="color:{COLOR["text"]}">Tìm nhà bằng câu nói</b> — '
-            "gõ điều kiện của bạn như nói với người quen, hệ thống lọc và "
-            "chỉ ra căn nào đang lệch mặt bằng.")
+            "gõ điều kiện của bạn, hệ thống lọc và chỉ ra căn nào đang lệch "
+            "mặt bằng theo giá đang chào bán.")
         render_tim_nha()
 
 

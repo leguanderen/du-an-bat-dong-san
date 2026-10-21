@@ -204,6 +204,29 @@ TEST_CASE = [
     ("TC-39", "Biên", CC, "Sắp xếp theo mức lệch giá", [
         ("căn nào đang rẻ hơn thị trường ở Hà Đông",
          {"sap": "lech_thap", "quan_huyen": "Quận Hà Đông"}, ("co",), {})]),
+
+    # --------------------------------------------- G. Từ so sánh (21/10/2026)
+    # Lỗi người dùng báo: "nhỏ hơn 800 triệu" bị hiểu NGƯỢC thành "từ 800 triệu
+    # trở lên", vì chữ "hơn" cuối cụm khớp từ khoá sàn trước.
+    ("TC-41", "So sánh", CC, "'nhỏ hơn' là trần, không phải sàn", [
+        ("chung cư nhỏ hơn 800 triệu",
+         {"gia_den": 0.8 * TY}, ("gia_tu",), {})]),
+    ("TC-42", "So sánh", CC, "'ít hơn' kèm quận", [
+        ("căn hộ Cầu Giấy ít hơn 4 tỷ",
+         {"gia_den": 4 * TY, "quan_huyen": "Quận Cầu Giấy"}, ("gia_tu",), {})]),
+    ("TC-43", "So sánh", ND, "Cụm đứng SAU số: 'trở xuống'", [
+        ("nhà Đống Đa 5 tỷ trở xuống",
+         {"gia_den": 5 * TY, "quan_huyen": "Quận Đống Đa"}, ("gia_tu",), {})]),
+    ("TC-44", "So sánh", CC, "Cụm đứng SAU số: 'trở lên'", [
+        ("căn hộ 3 tỷ trở lên", {"gia_tu": 3 * TY}, ("gia_den",), {})]),
+    ("TC-45", "So sánh", CC, "Dấu '>' gõ tắt", [
+        ("căn hộ > 3 tỷ", {"gia_tu": 3 * TY}, ("gia_den",), {})]),
+    ("TC-46", "So sánh", CC, "Hai vế so sánh trong một câu", [
+        ("chung cư lớn hơn 70m2 nhỏ hơn 5 tỷ",
+         {"dt_tu": 70.0, "gia_den": 5 * TY}, ("gia_tu", "dt_den"), {})]),
+    ("TC-47", "So sánh", CC, "Đơn giá 'nhỏ hơn'", [
+        ("căn hộ đơn giá nhỏ hơn 80 triệu/m2",
+         {"gia_m2_den": 80e6}, ("gia_m2_tu",), {})]),
 ]
 
 

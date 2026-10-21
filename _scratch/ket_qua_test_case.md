@@ -1,6 +1,6 @@
 # Kết quả test case chatbot Tìm nhà
 
-Chạy lúc 05:44 28/09/2026 · **40/40 test case đạt**, 51/51 lượt đúng.
+Chạy lúc 06:10 21/10/2026 · **47/47 test case đạt**, 58/58 lượt đúng.
 
 | Mã | Nhóm | Câu người dùng | Mong đợi | Hệ thống hiểu | Kết quả |
 |---|---|---|---|---|---|
@@ -55,3 +55,10 @@ Chạy lúc 05:44 28/09/2026 · **40/40 test case đạt**, 51/51 lượt đúng
 | TC-37 | Biên | nhà dưới 5 tỷ nhưng không ở trong ngõ | loai_hinh_tru=Nhà ngõ, hẻm | giá ≤ 5,00 tỷ, không lấy nhà ngõ, hẻm (164 căn) | Đạt |
 | TC-38 | Biên | căn hộ Tây Hồ hướng Đông | quan_huyen=Quận Tây Hồ; huong=Đông | Quận Tây Hồ, hướng Đông (18 căn) | Đạt |
 | TC-39 | Biên | căn nào đang rẻ hơn thị trường ở Hà Đông | sap=lech_thap; quan_huyen=Quận Hà Đông | Quận Hà Đông (476 căn) | Đạt |
+| TC-41 | So sánh | chung cư nhỏ hơn 800 triệu | gia_den=0.8 tỷ | giá ≤ 0,80 tỷ (2 căn) | Đạt |
+| TC-42 | So sánh | căn hộ Cầu Giấy ít hơn 4 tỷ | gia_den=4 tỷ; quan_huyen=Quận Cầu Giấy | giá ≤ 4,00 tỷ, Quận Cầu Giấy (73 căn) | Đạt |
+| TC-43 | So sánh | nhà Đống Đa 5 tỷ trở xuống | gia_den=5 tỷ; quan_huyen=Quận Đống Đa | giá ≤ 5,00 tỷ, Quận Đống Đa (90 căn) | Đạt |
+| TC-44 | So sánh | căn hộ 3 tỷ trở lên | gia_tu=3 tỷ | giá ≥ 3,00 tỷ (4500 căn) | Đạt |
+| TC-45 | So sánh | căn hộ > 3 tỷ | gia_tu=3 tỷ | giá ≥ 3,00 tỷ (4500 căn) | Đạt |
+| TC-46 | So sánh | chung cư lớn hơn 70m2 nhỏ hơn 5 tỷ | dt_tu=70.0; gia_den=5 tỷ | giá ≤ 5,00 tỷ, từ 70 m² (433 căn) | Đạt |
+| TC-47 | So sánh | căn hộ đơn giá nhỏ hơn 80 triệu/m2 | gia_m2_den=80000000.0 | ≤ 80 tr/m² (2784 căn) | Đạt |
